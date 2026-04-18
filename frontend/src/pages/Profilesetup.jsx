@@ -12,6 +12,22 @@ const DEPTS = ['Computer Science', 'Information Technology', 'Electronics & Comm
 const BATCHES = ['2025', '2026', '2027', '2028']
 const SEMESTERS = ['1', '2', '3', '4', '5', '6', '7', '8']
 
+const G = '#1a7a4a'; const GM = '#22a05e'; const GL = '#d6f0e2'; const GX = '#eaf7f0'
+const T = '#0f2718'; const T2 = '#3d6b4f'; const T3 = '#7aaa8a'
+const B = '#d4ead9'; const B2 = '#c0dfc8'; const BG = '#f0f7f3'; const S = '#fff'
+const R = '#c0392b'; const RL = '#fdecea'
+
+
+
+import React from 'react';
+const ProfileStyles = React.memo(() => (
+    <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        * { box-sizing: border-box; }
+        input:focus, select:focus { border-color: #22a05e !important; box-shadow: 0 0 0 3px rgba(34,160,94,0.12); }
+    `}</style>
+));
+
 export default function ProfileSetup({ editMode = false }) {
     const navigate = useNavigate()
     const [step, setStep] = useState(0)
@@ -76,45 +92,17 @@ export default function ProfileSetup({ editMode = false }) {
         }
     }
 
-    const G = '#1a7a4a'; const GM = '#22a05e'; const GL = '#d6f0e2'; const GX = '#eaf7f0'
-    const T = '#0f2718'; const T2 = '#3d6b4f'; const T3 = '#7aaa8a'
-    const B = '#d4ead9'; const B2 = '#c0dfc8'; const BG = '#f0f7f3'; const S = '#fff'
-    const R = '#c0392b'; const RL = '#fdecea'
+    const inputStyle = {
+        width: '100%', padding: '0.75rem 1rem', borderRadius: 10,
+        border: `1.5px solid ${B}`, fontFamily: 'inherit', fontSize: '0.9rem',
+        color: T, outline: 'none', boxSizing: 'border-box', background: S,
+    }
 
-    const inp = (field, props = {}) => ({
-        value: form[field],
-        onChange: e => set(field, e.target.value),
-        style: {
-            width: '100%', padding: '0.75rem 1rem', borderRadius: 10,
-            border: `1.5px solid ${B}`, fontFamily: 'inherit', fontSize: '0.9rem',
-            color: T, outline: 'none', boxSizing: 'border-box', background: S,
-        },
-        ...props,
-    })
-
-    const Field = ({ label, children, required }) => (
-        <div style={{ marginBottom: '1.1rem' }}>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: T2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                {label}{required && <span style={{ color: R, marginLeft: 3 }}>*</span>}
-            </label>
-            {children}
-        </div>
-    )
-
-    const Select = ({ field, options, placeholder }) => (
-        <select {...inp(field)} style={{ ...inp(field).style, cursor: 'pointer' }}>
-            <option value="">{placeholder || `Select ${field}`}</option>
-            {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-    )
+    const labelStyle = { display: 'block', fontSize: '0.78rem', fontWeight: 700, color: T2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }
 
     return (
         <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Plus Jakarta Sans', sans-serif", color: T }}>
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-                * { box-sizing: border-box; }
-                input:focus, select:focus { border-color: ${GM} !important; box-shadow: 0 0 0 3px rgba(34,160,94,0.12); }
-            `}</style>
+            <ProfileStyles />
 
             {/* TOP BAR */}
             <div style={{ background: S, borderBottom: `1px solid ${B}`, padding: '0 2rem', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
@@ -157,22 +145,30 @@ export default function ProfileSetup({ editMode = false }) {
                         <>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '1.5rem', color: T }}>👤 Personal Information</div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1rem' }}>
-                                <Field label="Full Name" required>
-                                    <input {...inp('name')} placeholder="e.g. Hritani Sharma" />
-                                </Field>
-                                <Field label="Roll Number" required>
-                                    <input {...inp('roll')} placeholder="e.g. CS2025041" />
-                                </Field>
-                                <Field label="Date of Birth" required>
-                                    <input {...inp('dob')} type="date" />
-                                </Field>
-                                <Field label="Gender" required>
-                                    <Select field="gender" options={['Female', 'Male', 'Other', 'Prefer not to say']} placeholder="Select gender" />
-                                </Field>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Full Name<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Hritani Sharma" />
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Roll Number<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <input style={inputStyle} value={form.roll} onChange={e => set('roll', e.target.value)} placeholder="e.g. CS2025041" />
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Date of Birth<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <input style={inputStyle} value={form.dob} onChange={e => set('dob', e.target.value)} type="date" />
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Gender<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <select style={{...inputStyle, cursor: 'pointer'}} value={form.gender} onChange={e => set('gender', e.target.value)}>
+                                        <option value="">Select gender</option>
+                                        {['Female', 'Male', 'Other', 'Prefer not to say'].map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                </div>
                             </div>
-                            <Field label="College Name" required>
-                                <input {...inp('college')} placeholder="Your college name" />
-                            </Field>
+                            <div style={{ marginBottom: '1.1rem' }}>
+                                <label style={labelStyle}>College Name<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                <input style={inputStyle} value={form.college} onChange={e => set('college', e.target.value)} placeholder="Your college name" />
+                            </div>
                         </>
                     )}
 
@@ -180,23 +176,37 @@ export default function ProfileSetup({ editMode = false }) {
                     {step === 1 && (
                         <>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '1.5rem', color: T }}>🎓 Academic Information</div>
-                            <Field label="Department" required>
-                                <Select field="dept" options={DEPTS} placeholder="Select department" />
-                            </Field>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 1rem' }}>
-                                <Field label="Batch (Graduation Year)" required>
-                                    <Select field="batch" options={BATCHES} placeholder="Select batch" />
-                                </Field>
-                                <Field label="Current Semester" required>
-                                    <Select field="semester" options={SEMESTERS} placeholder="Semester" />
-                                </Field>
-                                <Field label="CGPA" required>
-                                    <input {...inp('cgpa')} placeholder="e.g. 8.7" type="number" step="0.1" min="0" max="10" />
-                                </Field>
+                            <div style={{ marginBottom: '1.1rem' }}>
+                                <label style={labelStyle}>Department<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                <select style={{...inputStyle, cursor: 'pointer'}} value={form.dept} onChange={e => set('dept', e.target.value)}>
+                                    <option value="">Select department</option>
+                                    {DEPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
                             </div>
-                            <Field label="Academic Advisor / Faculty Mentor">
-                                <input {...inp('advisor')} placeholder="e.g. Dr. Priya Nair" />
-                            </Field>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 1rem' }}>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Batch (Graduation Year)<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <select style={{...inputStyle, cursor: 'pointer'}} value={form.batch} onChange={e => set('batch', e.target.value)}>
+                                        <option value="">Select batch</option>
+                                        {BATCHES.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Current Semester<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <select style={{...inputStyle, cursor: 'pointer'}} value={form.semester} onChange={e => set('semester', e.target.value)}>
+                                        <option value="">Semester</option>
+                                        {SEMESTERS.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>CGPA<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <input style={inputStyle} value={form.cgpa} onChange={e => set('cgpa', e.target.value)} placeholder="e.g. 8.7" type="number" step="0.1" min="0" max="10" />
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: '1.1rem' }}>
+                                <label style={labelStyle}>Academic Advisor / Faculty Mentor</label>
+                                <input style={inputStyle} value={form.advisor} onChange={e => set('advisor', e.target.value)} placeholder="e.g. Dr. Priya Nair" />
+                            </div>
                         </>
                     )}
 
@@ -205,16 +215,19 @@ export default function ProfileSetup({ editMode = false }) {
                         <>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '1.5rem', color: T }}>📍 Contact & Accommodation</div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1rem' }}>
-                                <Field label="Email Address">
-                                    <input {...inp('email')} type="email" placeholder="your@email.com" />
-                                </Field>
-                                <Field label="Phone Number" required>
-                                    <input {...inp('phone')} placeholder="+91 98765 43210" />
-                                </Field>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Email Address</label>
+                                    <input style={inputStyle} value={form.email} onChange={e => set('email', e.target.value)} type="email" placeholder="your@email.com" />
+                                </div>
+                                <div style={{ marginBottom: '1.1rem' }}>
+                                    <label style={labelStyle}>Phone Number<span style={{ color: R, marginLeft: 3 }}>*</span></label>
+                                    <input style={inputStyle} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+91 98765 43210" />
+                                </div>
                             </div>
-                            <Field label="Hostel / Accommodation">
-                                <input {...inp('hostel')} placeholder="e.g. Block C, Room 204 (or Day Scholar)" />
-                            </Field>
+                            <div style={{ marginBottom: '1.1rem' }}>
+                                <label style={labelStyle}>Hostel / Accommodation</label>
+                                <input style={inputStyle} value={form.hostel} onChange={e => set('hostel', e.target.value)} placeholder="e.g. Block C, Room 204 (or Day Scholar)" />
+                            </div>
                             <div style={{ background: GX, border: `1px solid ${B2}`, borderRadius: 10, padding: '0.85rem 1rem', fontSize: '0.82rem', color: T2 }}>
                                 💡 This information is used only for clearance communication and won't be shared publicly.
                             </div>
