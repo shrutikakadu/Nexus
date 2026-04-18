@@ -185,14 +185,96 @@ export default function StudentDashboard() {
     setCardNum(''); setCardExp(''); setCardCvv('')
   }
 
-  function processPayment() {
-    if (cardNum.length < 16 || !cardExp || cardCvv.length < 3) { showToast('Fill all card details', 'error'); return }
+  function loadRazorpayScript(src) {
+    return new Promise((resolve) => {
+      const script = document.createElement('script')
+      script.src = src
+      script.onload = () => {
+        resolve(true)
+      }
+      script.onerror = () => {
+        resolve(false)
+      }
+      document.body.appendChild(script)
+    })
+  }
+
+  async function processPayment() {
     setPayStep('processing')
-    setTimeout(() => {
-      setDues(prev => prev.map(d => d.id === payModal.id ? { ...d, paid: true } : d))
-      setPayStep('success')
-      setNotifs(prev => [{ id: Date.now(), msg: `Payment of ₹${payModal.amount} for "${payModal.item}" successful.`, time: 'Just now', read: false, type: 'success' }, ...prev])
-    }, 2500)
+    const res = await loadRazorpayScript('https://checkout.razorpay.com/v1/checkout.js')
+    
+    if (!res) {
+      showToast('Razorpay SDK failed to load. Are you online?', 'error')
+      setPayStep('form')
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/payment/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: payModal.amount, receipt: `receipt_${payModal.id}` })
+      })
+      const order = await response.json()
+      
+      if (!response.ok) {
+        showToast(order.detail || 'Failed to create order', 'error')
+        setPayStep('form')
+        return
+      }
+
+      const options = {
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Nexus Graduation Portal',
+        description: `Payment for ${payModal.item}`,
+        order_id: order.order_id,
+        handler: async function (response) {
+          try {
+            setPayStep('processing')
+            const verifyRes = await fetch('http://localhost:8000/api/payment/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            })
+            const verifyData = await verifyRes.json()
+            if (verifyRes.ok) {
+              setDues(prev => prev.map(d => d.id === payModal.id ? { ...d, paid: true } : d))
+              setPayStep('success')
+              setNotifs(prev => [{ id: Date.now(), msg: `Payment of ₹${payModal.amount} for "${payModal.item}" successful.`, time: 'Just now', read: false, type: 'success' }, ...prev])
+            } else {
+              showToast(verifyData.detail || 'Payment Verification Failed', 'error')
+              setPayStep('form')
+            }
+          } catch (err) {
+            showToast('Error verifying payment', 'error')
+            setPayStep('form')
+          }
+        },
+        prefill: {
+          name: STUDENT.name,
+          email: STUDENT.email,
+          contact: '9999999999'
+        },
+        theme: {
+          color: '#1a7a4a'
+        }
+      }
+      const paymentObject = new window.Razorpay(options)
+      paymentObject.open()
+      paymentObject.on('payment.failed', function (response){
+         showToast(response.error.description || 'Payment Failed', 'error')
+         setPayStep('form')
+      })
+    } catch (err) {
+      showToast('Error initiating payment', 'error')
+      setPayStep('form')
+    }
   }
 
   function markAllRead() {
@@ -912,23 +994,9 @@ export default function StudentDashboard() {
             {payStep === 'form' && <>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.4rem', marginBottom: '0.4rem' }}>Pay Due</div>
               <div style={{ fontSize: '0.85rem', color: T3, marginBottom: '1.25rem' }}>{payModal.item} — <strong style={{ color: R }}>₹{payModal.amount}</strong></div>
-              <div style={{ marginBottom: '0.85rem' }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: T2, display: 'block', marginBottom: 4 }}>Card Number</label>
-                <input style={input} placeholder="1234 5678 9012 3456" maxLength={16} value={cardNum} onChange={e => setCardNum(e.target.value.replace(/\D/g, ''))} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: '1.25rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: T2, display: 'block', marginBottom: 4 }}>Expiry (MM/YY)</label>
-                  <input style={input} placeholder="12/27" maxLength={5} value={cardExp} onChange={e => setCardExp(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: T2, display: 'block', marginBottom: 4 }}>CVV</label>
-                  <input style={input} placeholder="123" maxLength={3} type="password" value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, ''))} />
-                </div>
-              </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button>
-                <button style={{ ...btn(R, S), flex: 1 }} onClick={processPayment}>Pay ₹{payModal.amount}</button>
+                <button style={{ ...btn(R, S), flex: 1 }} onClick={processPayment}>Pay with Razorpay</button>
               </div>
             </>}
             {payStep === 'processing' && (
