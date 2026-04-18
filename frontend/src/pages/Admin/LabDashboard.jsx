@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
+import DocumentViewer from '../../components/DocumentViewer'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -27,6 +29,14 @@ export default function LabDashboard() {
     const [selected, setSelected] = useState(STUDENTS[0])
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(STUDENTS.length)
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null)
+
+    useEffect(() => {
+        function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Lab')) }
+        loadSubmissions()
+        return onStoreUpdate(loadSubmissions)
+    }, [])
 
     function showToast(msg) { setToast({ msg, show: true }); setTimeout(() => setToast(t => ({ ...t, show: false })), 2800) }
 
@@ -34,11 +44,27 @@ export default function LabDashboard() {
         if (approvedIds.includes(s.id)) return
         if (s.labManual !== 'Submitted' || s.equipment !== 'Returned') { showToast(`⚠️ Cannot approve — ${s.name} has pending lab submissions`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
+        if (s.studentId) adminApprove(s.studentId, 'Lab', 'Lab clearance approved. All equipment returned.')
         showToast(`✓ Lab clearance approved for ${s.name}`)
     }
-    function handleReject(s) { setRejectedIds(p => [...p, s.id]); showToast(`✗ Lab clearance rejected for ${s.name}`) }
+    function handleReject(s) {
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Lab', 'Lab clearance rejected.')
+        showToast(`✗ Lab clearance rejected for ${s.name}`)
+    }
 
-    const tableData = STUDENTS.map(s => ({
+    const storeStudents = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+        .map(s => ({
+            id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName, roll: s.studentId, labManual: 'Submitted', equipment: 'Returned',
+            statusColor: s.statusForRole === 'approved' ? 'green' : 'amber',
+            statusLabel: s.statusForRole === 'approved' ? 'Cleared' : 'Pending',
+            heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
+        }))
+    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll))]
+
+    const tableData = allStudents.map(s => ({
         ...s,
         status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
@@ -77,7 +103,9 @@ export default function LabDashboard() {
                                 <ClearanceTable columns={COLUMNS} data={tableData} approvedIds={approvedIds} onApprove={handleApprove} onReject={handleReject} onRowClick={setSelected}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); showToast(`Viewing submission for ${row.name}`) }}>View</button>
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Viewing submission for ${row.name}`) }}>
+                                                {row.fromStore ? '📄 View Docs' : 'View'}
+                                            </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
@@ -108,6 +136,7 @@ export default function LabDashboard() {
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {viewingDocs && <DocumentViewer role="Lab" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
         </div>
     )
 }

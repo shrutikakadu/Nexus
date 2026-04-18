@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { studentUploadDocument, getStudentStatus, onStoreUpdate } from '../../utils/clearanceStore'
 
 const STUDENT = {
   name: 'Hritani Sharma',
@@ -27,12 +28,12 @@ const INITIAL_PIPELINE = [
 ]
 
 const INITIAL_DOCS = [
-  { id: 1, name: 'College ID Card', icon: '🪪', status: 'verified', size: '1.2 MB', type: 'JPG', date: '15 Apr' },
-  { id: 2, name: 'Library Receipt', icon: '📚', status: 'verified', size: '0.8 MB', type: 'PDF', date: '15 Apr' },
-  { id: 3, name: 'Lab Manual Return', icon: '🔬', status: 'pending', size: '2.1 MB', type: 'PDF', date: '16 Apr' },
-  { id: 4, name: 'Fee Clearance', icon: '💳', status: 'missing', size: '', type: '', date: '' },
-  { id: 5, name: 'Hostel No-Dues', icon: '🏠', status: 'missing', size: '', type: '', date: '' },
-  { id: 6, name: 'Sports No-Dues', icon: '⚽', status: 'missing', size: '', type: '', date: '' },
+  { id: 1, name: 'College ID Card', icon: '🪪', status: 'verified', size: '1.2 MB', type: 'JPG', date: '15 Apr', targetDept: 'Library' },
+  { id: 2, name: 'Library Receipt', icon: '📚', status: 'verified', size: '0.8 MB', type: 'PDF', date: '15 Apr', targetDept: 'Library' },
+  { id: 3, name: 'Lab Manual Return', icon: '🔬', status: 'pending', size: '2.1 MB', type: 'PDF', date: '16 Apr', targetDept: 'Lab' },
+  { id: 4, name: 'Fee Clearance', icon: '💳', status: 'missing', size: '', type: '', date: '', targetDept: 'Accounts' },
+  { id: 5, name: 'Hostel No-Dues', icon: '🏠', status: 'missing', size: '', type: '', date: '', targetDept: 'Hostel' },
+  { id: 6, name: 'Sports No-Dues', icon: '⚽', status: 'missing', size: '', type: '', date: '', targetDept: 'HOD' },
 ]
 
 const INITIAL_NOTIFS = [
@@ -86,6 +87,9 @@ export default function StudentDashboard() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [scanMode, setScanMode] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
 
   const unread = notifs.filter(n => !n.read).length
   const clearedCount = pipeline.filter(p => p.status === 'approved').length
@@ -94,19 +98,86 @@ export default function StudentDashboard() {
   const uploadedDocs = docs.filter(d => d.size)
   const pendingDues = dues.filter(d => !d.paid).length
 
+  // Sync clearance status from admin actions
+  useEffect(() => {
+    function syncFromStore() {
+      const status = getStudentStatus(STUDENT.roll)
+      if (!status) return
+      setPipeline(prev => prev.map(p => {
+        const storeStatus = status.clearanceStatus[p.dept]
+        if (storeStatus && storeStatus !== p.status) {
+          const comment = status.adminComments[p.dept] || p.comment
+          return { ...p, status: storeStatus, comment }
+        }
+        return p
+      }))
+    }
+    syncFromStore()
+    return onStoreUpdate(syncFromStore)
+  }, [])
+
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('File too large! Max 5MB.', 'error')
+      return
+    }
+    setSelectedFile(file)
+  }
+
   function confirmUpload() {
-    setDocs(prev => prev.map(d => d.id === uploadTarget
-      ? { ...d, status: 'pending', size: (Math.random() * 3 + 0.5).toFixed(1) + ' MB', type: 'PDF', date: 'Today' }
-      : d))
-    setUploadModal(false)
-    setUploadTarget(null)
-    showToast('Document uploaded successfully!')
-    setNotifs(prev => [{ id: Date.now(), msg: 'Document uploaded and under review.', time: 'Just now', read: false, type: 'info' }, ...prev])
+    if (!selectedFile && !uploadTarget) return
+    
+    setUploading(true)
+    const targetDoc = docs.find(d => d.id === uploadTarget)
+    const fileType = selectedFile ? selectedFile.name.split('.').pop().toUpperCase() : 'PDF'
+    const fileSize = selectedFile ? (selectedFile.size / (1024 * 1024)).toFixed(1) + ' MB' : (Math.random() * 3 + 0.5).toFixed(1) + ' MB'
+    const targetDept = targetDoc?.targetDept || 'Library'
+
+    // Read file and store it
+    const reader = new FileReader()
+    const processUpload = (dataUrl) => {
+      // Save to shared store so admin dashboards can see it
+      studentUploadDocument({
+        studentId: STUDENT.roll,
+        studentName: STUDENT.name,
+        initials: STUDENT.photo,
+        avatarClass: 'blue-bg',
+        dept: STUDENT.dept,
+        batch: STUDENT.batch,
+        docName: targetDoc?.name || selectedFile?.name || 'Document',
+        docType: fileType,
+        docSize: fileSize,
+        targetDept,
+        fileDataUrl: dataUrl,
+      })
+
+      // Update local docs state
+      setDocs(prev => prev.map(d => d.id === uploadTarget
+        ? { ...d, status: 'pending', size: fileSize, type: fileType, date: 'Today', fileName: selectedFile?.name }
+        : d))
+      
+      setUploadModal(false)
+      setUploadTarget(null)
+      setSelectedFile(null)
+      setUploading(false)
+      showToast(`✓ "${targetDoc?.name || selectedFile?.name}" uploaded and sent to ${targetDept} admin!`)
+      setNotifs(prev => [{ id: Date.now(), msg: `Document "${targetDoc?.name}" uploaded and sent to ${targetDept} department for review.`, time: 'Just now', read: false, type: 'info' }, ...prev])
+    }
+
+    if (selectedFile) {
+      reader.onload = () => processUpload(reader.result)
+      reader.readAsDataURL(selectedFile)
+    } else {
+      // Simulate upload without a real file
+      setTimeout(() => processUpload(null), 500)
+    }
   }
 
   function openPayModal(due) {
@@ -757,18 +828,78 @@ export default function StudentDashboard() {
 
       {/* UPLOAD MODAL */}
       {uploadModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setUploadModal(false)}>
-          <div style={{ background: S, borderRadius: 18, padding: '2rem', width: 400 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => { setUploadModal(false); setSelectedFile(null) }}>
+          <div style={{ background: S, borderRadius: 18, padding: '2rem', width: 440 }} onClick={e => e.stopPropagation()}>
             <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.4rem', marginBottom: '0.4rem' }}>Upload Document</div>
-            <div style={{ fontSize: '0.83rem', color: T3, marginBottom: '1.25rem' }}>{uploadTarget ? `Uploading: ${docs.find(d => d.id === uploadTarget)?.name}` : 'Choose document type'}</div>
-            {!uploadTarget && <select style={{ ...input, marginBottom: '1rem' }}>{docs.filter(d => !d.size).map(d => <option key={d.id}>{d.name}</option>)}</select>}
-            <div style={{ border: `2px dashed ${B2}`, borderRadius: 12, padding: '2rem', textAlign: 'center', background: BG, cursor: 'pointer', marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
-              <div style={{ fontSize: '0.83rem', color: T3 }}>Click to browse · PDF, JPG, PNG · max 5MB</div>
+            <div style={{ fontSize: '0.83rem', color: T3, marginBottom: '1.25rem' }}>
+              {uploadTarget ? `Uploading: ${docs.find(d => d.id === uploadTarget)?.name}` : 'Choose document type'}
+              {uploadTarget && <span style={{ display: 'block', fontSize: '0.72rem', color: AM, marginTop: 4 }}>→ Will be sent to <strong>{docs.find(d => d.id === uploadTarget)?.targetDept}</strong> department</span>}
             </div>
+            {!uploadTarget && (
+              <select 
+                style={{ ...input, marginBottom: '1rem' }} 
+                onChange={e => {
+                  const doc = docs.find(d => d.name === e.target.value)
+                  if (doc) setUploadTarget(doc.id)
+                }}
+              >
+                <option value="">Select document...</option>
+                {docs.filter(d => !d.size).map(d => <option key={d.id} value={d.name}>{d.name} → {d.targetDept}</option>)}
+              </select>
+            )}
+            
+            {/* Hidden real file input */}
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+            
+            {/* Dropzone area */}
+            <div 
+              style={{ 
+                border: `2px dashed ${selectedFile ? GM : B2}`, 
+                borderRadius: 12, 
+                padding: selectedFile ? '1.25rem' : '2rem', 
+                textAlign: 'center', 
+                background: selectedFile ? GX : BG, 
+                cursor: 'pointer', 
+                marginBottom: '1.25rem',
+                transition: 'all 0.2s'
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {selectedFile ? (
+                <>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: G, marginBottom: 4 }}>{selectedFile.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: T3 }}>
+                    {selectedFile.type || 'document'} · {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: AM, marginTop: 6, cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setSelectedFile(null) }}>
+                    ✕ Remove and choose another
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: T2, marginBottom: 4 }}>Click to choose a file</div>
+                  <div style={{ fontSize: '0.78rem', color: T3 }}>PDF, JPG, PNG, DOC · max 5MB</div>
+                </>
+              )}
+            </div>
+            
             <div style={{ display: 'flex', gap: 10 }}>
-              <button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => setUploadModal(false)}>Cancel</button>
-              <button style={{ ...btn(G, S), flex: 1 }} onClick={confirmUpload}>Simulate Upload ✓</button>
+              <button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => { setUploadModal(false); setSelectedFile(null) }}>Cancel</button>
+              <button 
+                style={{ ...btn(G, S), flex: 1, opacity: uploading ? 0.6 : 1 }} 
+                onClick={confirmUpload}
+                disabled={uploading}
+              >
+                {uploading ? '⏳ Uploading...' : selectedFile ? `Upload ${selectedFile.name.split('.').pop().toUpperCase()}` : 'Upload'}
+              </button>
             </div>
           </div>
         </div>
@@ -835,3 +966,4 @@ export default function StudentDashboard() {
     </div>
   )
 }
+

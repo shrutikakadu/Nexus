@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
+import DocumentViewer from '../../components/DocumentViewer'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -29,6 +31,14 @@ export default function HODDashboard() {
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(ALL_STUDENTS.length)
     const [comment, setComment] = useState('')
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null)
+
+    useEffect(() => {
+        function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('HOD')) }
+        loadSubmissions()
+        return onStoreUpdate(loadSubmissions)
+    }, [])
 
     function showToast(msg) { setToast({ msg, show: true }); setTimeout(() => setToast(t => ({ ...t, show: false })), 2800) }
 
@@ -36,11 +46,27 @@ export default function HODDashboard() {
         if (approvedIds.includes(s.id)) return
         if (s.project !== 'Submitted' || s.internship !== 'Completed') { showToast(`⚠️ Cannot approve — ${s.name} has incomplete academic requirements`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
+        if (s.studentId) adminApprove(s.studentId, 'HOD', comment || 'HOD approval granted. Forwarded to Principal.')
         showToast(`✓ HOD approval granted for ${s.name} — forwarded to Principal`)
     }
-    function handleReject(s) { setRejectedIds(p => [...p, s.id]); showToast(`✗ Rejected with comment for ${s.name}`) }
+    function handleReject(s) {
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'HOD', comment || 'HOD clearance rejected.')
+        showToast(`✗ Rejected with comment for ${s.name}`)
+    }
 
-    const tableData = ALL_STUDENTS.map(s => ({
+    const storeStudents = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+        .map(s => ({
+            id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName, roll: s.studentId, project: 'Submitted', internship: 'Completed', dept: 'CS',
+            statusColor: s.statusForRole === 'approved' ? 'green' : 'amber',
+            statusLabel: s.statusForRole === 'approved' ? 'HOD Approved' : 'Pending HOD',
+            heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
+        }))
+    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll))]
+
+    const tableData = allStudents.map(s => ({
         ...s,
         status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
@@ -83,7 +109,9 @@ export default function HODDashboard() {
                                 <ClearanceTable columns={COLUMNS} data={tableData} approvedIds={approvedIds} onApprove={handleApprove} onReject={handleReject} onRowClick={setSelected}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); showToast(`Viewing project for ${row.name}`) }}>📁 View Project</button>
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Viewing project for ${row.name}`) }}>
+                                                {row.fromStore ? '📄 View Docs' : '📁 View Project'}
+                                            </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
@@ -127,6 +155,7 @@ export default function HODDashboard() {
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {viewingDocs && <DocumentViewer role="HOD" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
         </div>
     )
 }

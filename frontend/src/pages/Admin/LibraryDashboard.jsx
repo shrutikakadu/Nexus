@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
+import DocumentViewer from '../../components/DocumentViewer'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -45,6 +47,18 @@ export default function LibraryDashboard() {
     const [selectedStudent, setSelectedStudent] = useState(STUDENTS[0])
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(STUDENTS.length)
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null) // { studentId, studentName }
+
+    // Load student submissions from shared store
+    useEffect(() => {
+        function loadSubmissions() {
+            const subs = getSubmissionsForAdmin('Library')
+            setStoreSubmissions(subs)
+        }
+        loadSubmissions()
+        return onStoreUpdate(loadSubmissions)
+    }, [])
 
     function showToast(msg) {
         setToast({ msg, show: true })
@@ -56,15 +70,44 @@ export default function LibraryDashboard() {
         if (student.fine > 0) { showToast(`⚠️ Cannot approve — ${student.name} has ₹${student.fine} fine pending`); return }
         setApprovedIds(prev => [...prev, student.id])
         setPendingCount(p => Math.max(0, p - 1))
+        // Sync to shared store
+        if (student.studentId) {
+            adminApprove(student.studentId, 'Library', 'Library clearance approved. All books returned.')
+        }
         showToast(`✓ Library clearance approved for ${student.name}`)
     }
 
     function handleReject(student) {
         setRejectedIds(prev => [...prev, student.id])
+        if (student.studentId) {
+            adminReject(student.studentId, 'Library', 'Library clearance rejected.')
+        }
         showToast(`✗ Library clearance rejected for ${student.name}`)
     }
 
-    const tableData = STUDENTS.map(s => ({
+    // Merge hardcoded students with store submissions
+    const storeStudents = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+        .map(s => ({
+            id: `store_${s.studentId}`,
+            studentId: s.studentId,
+            initials: s.initials,
+            avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName,
+            roll: s.studentId,
+            booksIssued: s.relevantDocs.length,
+            fine: 0,
+            status: s.statusForRole,
+            statusColor: s.statusForRole === 'approved' ? 'green' : s.statusForRole === 'rejected' ? 'red' : 'amber',
+            statusLabel: s.statusForRole === 'approved' ? 'Cleared' : s.statusForRole === 'rejected' ? 'Rejected' : 'Pending',
+            heatmap: s.clearanceStatus,
+            documents: s.relevantDocs,
+            fromStore: true,
+        }))
+
+    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll))]
+
+    const tableData = allStudents.map(s => ({
         ...s,
         status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : s.status,
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
@@ -125,7 +168,9 @@ export default function LibraryDashboard() {
                                     onRowClick={setSelectedStudent}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); showToast(`Viewing books for ${row.name}`) }}>View Books</button>
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Viewing books for ${row.name}`) }}>
+                                                {row.fromStore ? '📄 View Docs' : 'View Books'}
+                                            </button>
                                             {row.fine === 0
                                                 ? <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                                 : <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); showToast(`Add fine collected for ${row.name}`) }}>+ Collect Fine</button>
@@ -186,6 +231,14 @@ export default function LibraryDashboard() {
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {viewingDocs && (
+                <DocumentViewer
+                    role="Library"
+                    studentId={viewingDocs.studentId}
+                    studentName={viewingDocs.studentName}
+                    onClose={() => setViewingDocs(null)}
+                />
+            )}
         </div>
     )
 }

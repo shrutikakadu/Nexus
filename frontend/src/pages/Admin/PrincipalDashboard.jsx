@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import CertificateGenerator from '../../components/CertificateGenerator'
+import DocumentViewer from '../../components/DocumentViewer'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -31,6 +33,14 @@ export default function PrincipalDashboard() {
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(4)
     const [certStudent, setCertStudent] = useState(null)
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null)
+
+    useEffect(() => {
+        function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Principal')) }
+        loadSubmissions()
+        return onStoreUpdate(loadSubmissions)
+    }, [])
 
     function showToast(msg) { setToast({ msg, show: true }); setTimeout(() => setToast(t => ({ ...t, show: false })), 2800) }
 
@@ -38,11 +48,28 @@ export default function PrincipalDashboard() {
         if (approvedIds.includes(s.id)) return
         if (s.hodApproval !== 'Yes') { showToast(`⚠️ Cannot approve — ${s.name} missing HOD approval`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
+        if (s.studentId) adminApprove(s.studentId, 'Principal', 'Final graduation approved by Principal.')
         showToast(`🎓 Final graduation approved for ${s.name}!`)
     }
-    function handleReject(s) { setRejectedIds(p => [...p, s.id]); showToast(`✗ Graduation rejected for ${s.name}`) }
+    function handleReject(s) {
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Principal', 'Graduation rejected by Principal.')
+        showToast(`✗ Graduation rejected for ${s.name}`)
+    }
 
-    const tableData = ALL_STUDENTS.map(s => ({
+    const storeStudents = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+        .map(s => ({
+            id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName, roll: s.studentId, dept: 'Computer Science', hodApproval: 'Yes',
+            batch: '2021–2025', cgpa: '8.5',
+            statusColor: s.statusForRole === 'approved' ? 'green' : 'amber',
+            statusLabel: s.statusForRole === 'approved' ? '🎓 Graduated' : 'Pending Principal',
+            heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
+        }))
+    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll))]
+
+    const tableData = allStudents.map(s => ({
         ...s,
         status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
@@ -156,6 +183,7 @@ export default function PrincipalDashboard() {
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {viewingDocs && <DocumentViewer role="Principal" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
         </div>
     )
 }

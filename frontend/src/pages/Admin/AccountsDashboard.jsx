@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
+import DocumentViewer from '../../components/DocumentViewer'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -28,6 +30,14 @@ export default function AccountsDashboard() {
     const [selected, setSelected] = useState(STUDENTS[0])
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(STUDENTS.length)
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null)
+
+    useEffect(() => {
+        function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Accounts')) }
+        loadSubmissions()
+        return onStoreUpdate(loadSubmissions)
+    }, [])
 
     function showToast(msg) { setToast({ msg, show: true }); setTimeout(() => setToast(t => ({ ...t, show: false })), 2800) }
 
@@ -35,11 +45,27 @@ export default function AccountsDashboard() {
         if (approvedIds.includes(s.id)) return
         if (s.tuition !== 'Paid' || s.libraryFine !== '₹0') { showToast(`⚠️ Cannot approve — ${s.name} has pending dues`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
+        if (s.studentId) adminApprove(s.studentId, 'Accounts', 'Accounts clearance approved. All fees paid.')
         showToast(`✓ Accounts clearance approved for ${s.name}`)
     }
-    function handleReject(s) { setRejectedIds(p => [...p, s.id]); showToast(`✗ Accounts clearance rejected for ${s.name}`) }
+    function handleReject(s) {
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Accounts', 'Accounts clearance rejected. Pending dues.')
+        showToast(`✗ Accounts clearance rejected for ${s.name}`)
+    }
 
-    const tableData = STUDENTS.map(s => ({
+    const storeStudents = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+        .map(s => ({
+            id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName, roll: s.studentId, tuition: 'Paid', libraryFine: '₹0', hostelFees: 'Paid',
+            statusColor: s.statusForRole === 'approved' ? 'green' : 'amber',
+            statusLabel: s.statusForRole === 'approved' ? 'Cleared' : 'Pending',
+            heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
+        }))
+    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll))]
+
+    const tableData = allStudents.map(s => ({
         ...s,
         status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
@@ -81,7 +107,9 @@ export default function AccountsDashboard() {
                                 <ClearanceTable columns={COLUMNS} data={tableData} approvedIds={approvedIds} onApprove={handleApprove} onReject={handleReject} onRowClick={setSelected}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); showToast(`Verifying payment for ${row.name}`) }}>Verify</button>
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Verifying payment for ${row.name}`) }}>
+                                                {row.fromStore ? '📄 View Docs' : 'Verify'}
+                                            </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Clear</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
@@ -112,6 +140,7 @@ export default function AccountsDashboard() {
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {viewingDocs && <DocumentViewer role="Accounts" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
         </div>
     )
 }
