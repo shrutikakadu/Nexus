@@ -9,6 +9,7 @@ import AccountsDashboard from './pages/Admin/AccountsDashboard'
 import HostelDashboard from './pages/Admin/HostelDashboard'
 import HODDashboard from './pages/Admin/HODDashboard'
 import PrincipalDashboard from './pages/Admin/PrincipalDashboard'
+import ProfileSetup from './pages/ProfileSetup'
 
 export default function App() {
     return (
@@ -19,14 +20,16 @@ export default function App() {
             {/* Legacy admin route */}
             <Route path="/admin" element={<AdminDashboard />} />
             {/* Role-specific admin dashboards */}
-            <Route path="/admin/library"   element={<LibraryDashboard />} />
-            <Route path="/admin/lab"       element={<LabDashboard />} />
-            <Route path="/admin/accounts"  element={<AccountsDashboard />} />
-            <Route path="/admin/hostel"    element={<HostelDashboard />} />
-            <Route path="/admin/hod"       element={<HODDashboard />} />
+            <Route path="/admin/library" element={<LibraryDashboard />} />
+            <Route path="/admin/lab" element={<LabDashboard />} />
+            <Route path="/admin/accounts" element={<AccountsDashboard />} />
+            <Route path="/admin/hostel" element={<HostelDashboard />} />
+            <Route path="/admin/hod" element={<HODDashboard />} />
             <Route path="/admin/principal" element={<PrincipalDashboard />} />
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/profile-setup" element={<ProfileSetup />} />
+            <Route path="/edit-profile" element={<ProfileSetup editMode={true} />} />
         </Routes>
     )
 }

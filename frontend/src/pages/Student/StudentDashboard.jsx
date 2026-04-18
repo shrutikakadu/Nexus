@@ -2,23 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { studentUploadDocument, getStudentStatus, onStoreUpdate } from '../../utils/clearanceStore'
 
-const STUDENT = {
-  name: 'Hritani Sharma',
-  roll: 'CS2025041',
-  dept: 'Computer Science',
-  email: 'hritani.sharma@college.edu',
-  phone: '+91 98765 43210',
-  batch: '2025',
-  dob: '12 March 2003',
-  gender: 'Female',
-  cgpa: '8.7',
-  semester: '8',
-  hostel: 'Block C, Room 204',
-  advisor: 'Dr. Priya Nair',
-  clearanceId: 'NX-2025-041',
-  photo: 'HS',
-  college: 'Nexus Institute of Technology',
-  principal: 'Dr. R. K. Sharma',
+const STUDENT = function handleLogin() {
+  if (role === 'student') navigate('/student')  // no user data saved!
 }
 
 // CORRECT SEQUENCE as requested
