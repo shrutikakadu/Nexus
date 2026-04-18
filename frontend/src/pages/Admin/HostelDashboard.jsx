@@ -5,7 +5,7 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -49,9 +49,17 @@ export default function HostelDashboard() {
         showToast(`✓ Hostel clearance approved for ${s.name}`)
     }
     function handleReject(s) {
+        const reason = window.prompt(`Please enter the reason for rejecting ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
         setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'Hostel', 'Hostel clearance rejected.')
+        if (s.studentId) adminReject(s.studentId, 'Hostel', reason)
         showToast(`✗ Hostel clearance rejected for ${s.name}`)
+    }
+    function handleFlag(s) {
+        const reason = window.prompt(`Please enter the reason for flagging ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
+        if (s.studentId) adminFlag(s.studentId, 'Hostel', reason)
+        showToast(`⚠️ Issue flagged for ${s.name}`)
     }
 
     const storeStudents = storeSubmissions
@@ -109,6 +117,7 @@ export default function HostelDashboard() {
                                             </button>
                                             {row.damage !== 'None' && <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); showToast(`Damage fine added for ${row.name}`) }}>+ Fine</button>}
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
+                                            <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}

@@ -6,7 +6,7 @@ import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import CertificateGenerator from '../../components/CertificateGenerator'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -52,9 +52,17 @@ export default function PrincipalDashboard() {
         showToast(`🎓 Final graduation approved for ${s.name}!`)
     }
     function handleReject(s) {
+        const reason = window.prompt(`Please enter the reason for rejecting ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
         setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'Principal', 'Graduation rejected by Principal.')
+        if (s.studentId) adminReject(s.studentId, 'Principal', reason)
         showToast(`✗ Graduation rejected for ${s.name}`)
+    }
+    function handleFlag(s) {
+        const reason = window.prompt(`Please enter the reason for flagging ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
+        if (s.studentId) adminFlag(s.studentId, 'Principal', reason)
+        showToast(`⚠️ Issue flagged for ${s.name}`)
     }
 
     const storeStudents = storeSubmissions
@@ -140,6 +148,7 @@ export default function PrincipalDashboard() {
                                                 ? <button className="btn btn-sm btn-solid" onClick={e => { e.stopPropagation(); setCertStudent(row); setActiveItem('certificates') }}>📜 Certificate</button>
                                                 : <>
                                                     <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
+                                                    <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                                     <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                                 </>
                                             }
@@ -169,6 +178,7 @@ export default function PrincipalDashboard() {
                                         ) : (
                                             <>
                                                 <button className="btn btn-solid" onClick={() => handleApprove(selected)}>🎓 Approve Graduation →</button>
+                                                <button className="btn btn-amber" onClick={() => handleFlag(selected)}>⚠️ Flag Issue</button>
                                                 <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
                                             </>
                                         )}

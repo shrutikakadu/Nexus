@@ -345,7 +345,25 @@ export default function StudentDashboard() {
       setPipeline(prev => prev.map(p => {
         const storeStatus = status.clearanceStatus[p.dept]
         if (storeStatus && storeStatus !== p.status) {
+<<<<<<< HEAD
           return { ...p, status: storeStatus, comment: status.adminComments[p.dept] || p.comment }
+=======
+          const comment = status.adminComments[p.dept] || p.comment
+
+          if (storeStatus === 'rejected' || storeStatus === 'flagged') {
+            setNotifs(nPrev => {
+               const reasonText = comment ? ` Reason: ${comment}` : '';
+               const action = storeStatus === 'rejected' ? 'rejected' : 'flagged';
+               const msg = `Your ${p.dept} clearance was ${action}.${reasonText}`;
+               if (!nPrev.some(n => n.msg === msg)) {
+                 return [{ id: Date.now() + Math.random(), msg, time: 'Just now', read: false, type: 'error' }, ...nPrev]
+               }
+               return nPrev;
+            });
+          }
+
+          return { ...p, status: storeStatus, comment }
+>>>>>>> 8d2b6a17 (Reason)
         }
         return p
       }))

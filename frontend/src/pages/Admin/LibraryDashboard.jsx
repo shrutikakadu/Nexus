@@ -6,7 +6,7 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -78,11 +78,22 @@ export default function LibraryDashboard() {
     }
 
     function handleReject(student) {
+        const reason = window.prompt(`Please enter the reason for rejecting ${student.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
         setRejectedIds(prev => [...prev, student.id])
         if (student.studentId) {
-            adminReject(student.studentId, 'Library', 'Library clearance rejected.')
+            adminReject(student.studentId, 'Library', reason)
         }
         showToast(`✗ Library clearance rejected for ${student.name}`)
+    }
+
+    function handleFlag(student) {
+        const reason = window.prompt(`Please enter the reason for flagging ${student.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
+        if (student.studentId) {
+            adminFlag(student.studentId, 'Library', reason)
+        }
+        showToast(`⚠️ Issue flagged for ${student.name}`)
     }
 
     // Merge hardcoded students with store submissions
@@ -175,6 +186,7 @@ export default function LibraryDashboard() {
                                                 ? <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                                 : <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); showToast(`Add fine collected for ${row.name}`) }}>+ Collect Fine</button>
                                             }
+                                            <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}

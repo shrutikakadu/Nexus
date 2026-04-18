@@ -5,7 +5,7 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -50,9 +50,19 @@ export default function HODDashboard() {
         showToast(`✓ HOD approval granted for ${s.name} — forwarded to Principal`)
     }
     function handleReject(s) {
+        const reason = comment || window.prompt(`Please enter the reason for rejecting ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
         setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'HOD', comment || 'HOD clearance rejected.')
+        if (s.studentId) adminReject(s.studentId, 'HOD', reason)
         showToast(`✗ Rejected with comment for ${s.name}`)
+        setComment('')
+    }
+    function handleFlag(s) {
+        const reason = comment || window.prompt(`Please enter the reason for flagging ${s.name}:`);
+        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
+        if (s.studentId) adminFlag(s.studentId, 'HOD', reason)
+        showToast(`⚠️ Issue flagged for ${s.name}`)
+        setComment('')
     }
 
     const storeStudents = storeSubmissions
@@ -113,6 +123,7 @@ export default function HODDashboard() {
                                                 {row.fromStore ? '📄 View Docs' : '📁 View Project'}
                                             </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
+                                            <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}
@@ -143,6 +154,7 @@ export default function HODDashboard() {
                                     </div>
                                     <div className="detail-actions">
                                         <button className="btn btn-solid" onClick={() => handleApprove(selected)}>✓ Approve Graduation →</button>
+                                        <button className="btn btn-amber" onClick={() => handleFlag(selected)}>⚠️ Flag Issue</button>
                                         <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject with Comment</button>
                                     </div>
                                 </div>
