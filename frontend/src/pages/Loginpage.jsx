@@ -10,10 +10,16 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false)
 
     // ─── DEMO CREDENTIALS (Hackathon bypass) ───────────────────────────
-    const DEMO = {
-        student: { email: 'student@college.edu', password: 'demo123' },
-        teacher: { email: 'admin@college.edu', password: 'demo123' },
-    }
+    const [adminRole, setAdminRole] = useState('library')
+    const ADMIN_ROLES = [
+        { value: 'library',   label: '📚 Library Admin' },
+        { value: 'lab',       label: '🔬 Lab In-Charge' },
+        { value: 'accounts',  label: '💰 Accounts Admin' },
+        { value: 'hostel',    label: '🏠 Hostel Admin' },
+        { value: 'hod',       label: '🎓 Head of Dept. (HOD)' },
+        { value: 'principal', label: '🏛️ Principal' },
+    ]
+    const ROLE_ROUTES = { library: '/admin/library', lab: '/admin/lab', accounts: '/admin/accounts', hostel: '/admin/hostel', hod: '/admin/hod', principal: '/admin/principal' }
     // ───────────────────────────────────────────────────────────────────
 
     async function handleLogin() {
@@ -26,8 +32,13 @@ export default function LoginPage() {
         // ── DEMO BYPASS: works with ANY email if password is demo123 ──
         if (password === 'demo123') {
             localStorage.setItem('nexus_token', 'demo_token')
-            localStorage.setItem('nexus_role', role)
-            navigate(role === 'student' ? '/student' : '/admin')
+            if (role === 'student') {
+                localStorage.setItem('nexus_role', 'student')
+                navigate('/student')
+            } else {
+                localStorage.setItem('nexus_role', adminRole)
+                navigate(ROLE_ROUTES[adminRole])
+            }
             return
         }
 
@@ -42,8 +53,13 @@ export default function LoginPage() {
             const data = await response.json()
             if (response.ok) {
                 localStorage.setItem('nexus_token', data.access_token)
-                localStorage.setItem('nexus_role', role)
-                navigate(role === 'student' ? '/student' : '/admin')
+                if (role === 'student') {
+                    localStorage.setItem('nexus_role', 'student')
+                    navigate('/student')
+                } else {
+                    localStorage.setItem('nexus_role', adminRole)
+                    navigate(ROLE_ROUTES[adminRole])
+                }
             } else {
                 // FastAPI 422 validation errors return detail as an array of objects
                 // Safely convert to a readable string to avoid React render crash
@@ -170,18 +186,36 @@ export default function LoginPage() {
                             <span className="role-tab-icon">🎓</span>
                             <span className="role-tab-label">Student</span>
                         </div>
-                        <div className={`role-tab ${role === 'teacher' ? 'selected' : ''}`} onClick={() => setRole('teacher')}>
-                            <span className="role-tab-icon">👨‍🏫</span>
-                            <span className="role-tab-label">Teacher / Admin</span>
+                        <div className={`role-tab ${role !== 'student' ? 'selected' : ''}`} onClick={() => setRole('admin')}>
+                            <span className="role-tab-icon">🏛️</span>
+                            <span className="role-tab-label">Admin / Staff</span>
                         </div>
                     </div>
+                    {role !== 'student' && (
+                        <div className="form-group">
+                            <label className="form-label">Select Your Role</label>
+                            <select
+                                className="form-input"
+                                value={adminRole}
+                                onChange={e => setAdminRole(e.target.value)}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                {ADMIN_ROLES.map(r => (
+                                    <option key={r.value} value={r.value}>{r.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* DEMO HINT BOX */}
                     <div className="demo-hint">
                         <div className="demo-hint-title">⚡ Demo Credentials</div>
                         <div className="demo-hint-text">
-                            Student: <strong>student@college.edu</strong> / <strong>demo123</strong><br />
-                            Admin: <strong>admin@college.edu</strong> / <strong>demo123</strong>
+                            {role === 'student' ? (
+                                <>Student: <strong>student@college.edu</strong> / <strong>demo123</strong></>
+                            ) : (
+                                <>Any email + password <strong>demo123</strong> works for all admin roles</>  
+                            )}
                         </div>
                     </div>
 
@@ -215,7 +249,7 @@ export default function LoginPage() {
                     </div>
 
                     <button className="btn-auth" onClick={handleLogin} disabled={isLoading}>
-                        {isLoading ? 'Signing in...' : (role === 'student' ? 'Sign in as Student →' : 'Sign in as Admin →')}
+                        {isLoading ? 'Signing in…' : role === 'student' ? 'Sign in as Student →' : `Sign in as ${ADMIN_ROLES.find(r => r.value === adminRole)?.label.split(' ').slice(1).join(' ')} →`}
                     </button>
 
                     <div className="auth-switch">
