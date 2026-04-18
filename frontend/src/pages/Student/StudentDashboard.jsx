@@ -345,9 +345,6 @@ export default function StudentDashboard() {
       setPipeline(prev => prev.map(p => {
         const storeStatus = status.clearanceStatus[p.dept]
         if (storeStatus && storeStatus !== p.status) {
-<<<<<<< HEAD
-          return { ...p, status: storeStatus, comment: status.adminComments[p.dept] || p.comment }
-=======
           const comment = status.adminComments[p.dept] || p.comment
 
           if (storeStatus === 'rejected' || storeStatus === 'flagged') {
@@ -363,7 +360,6 @@ export default function StudentDashboard() {
           }
 
           return { ...p, status: storeStatus, comment }
->>>>>>> 8d2b6a17 (Reason)
         }
         return p
       }))
