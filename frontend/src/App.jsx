@@ -1,39 +1,32 @@
-
-import { Routes, Route } from 'react-router-dom'
-
+import { Routes, Route, Navigate } from 'react-router-dom'
 import LandingPage from './pages/Landing/LandingPage'
-import LoginPage from './pages/Auth/LoginPage'
+import LoginPage from './pages/Loginpage'
 import StudentDashboard from './pages/Student/StudentDashboard'
-
-// Admin Pages
-import AdminDashboard from './pages/Admin/AdminDashboard'
-import AdminStudentManagement from './pages/Admin/AdminStudentManagement'
-import DocumentVerification from './pages/Admin/DocumentVerification'
-import NoDues from './pages/Admin/NoDues'
-import GraduationRequests from './pages/Admin/GraduationRequests'
-import Certificates from './pages/Admin/Certificates'
-import Reports from './pages/Admin/Reports'
+import AdminDashboard from './pages/AdminDashboard'
+import LibraryDashboard from './pages/Admin/LibraryDashboard'
+import LabDashboard from './pages/Admin/LabDashboard'
+import AccountsDashboard from './pages/Admin/AccountsDashboard'
+import HostelDashboard from './pages/Admin/HostelDashboard'
+import HODDashboard from './pages/Admin/HODDashboard'
+import PrincipalDashboard from './pages/Admin/PrincipalDashboard'
 
 export default function App() {
     return (
         <Routes>
-
-            {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
-
-            {/* Student Portal */}
             <Route path="/student" element={<StudentDashboard />} />
-
-            {/* Admin Portal */}
+            {/* Legacy admin route */}
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/students" element={<AdminStudentManagement />} />
-            <Route path="/admin/documents" element={<DocumentVerification />} />
-            <Route path="/admin/nodues" element={<NoDues />} />
-            <Route path="/admin/graduation" element={<GraduationRequests />} />
-            <Route path="/admin/certificates" element={<Certificates />} />
-            <Route path="/admin/reports" element={<Reports />} />
-
+            {/* Role-specific admin dashboards */}
+            <Route path="/admin/library"   element={<LibraryDashboard />} />
+            <Route path="/admin/lab"       element={<LabDashboard />} />
+            <Route path="/admin/accounts"  element={<AccountsDashboard />} />
+            <Route path="/admin/hostel"    element={<HostelDashboard />} />
+            <Route path="/admin/hod"       element={<HODDashboard />} />
+            <Route path="/admin/principal" element={<PrincipalDashboard />} />
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     )
 }

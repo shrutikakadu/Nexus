@@ -28,7 +28,7 @@ export default function LandingPage() {
           background: rgba(247,253,249,0.92); backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--border);
           display: flex; align-items: center; justify-content: space-between;
-          padding: 0.85rem 3rem;
+          padding: 0.85rem 8%;
         }
         .logo { font-family: var(--mono); font-size: 1rem; font-weight: 500; color: var(--green); letter-spacing: 0.18em; text-transform: uppercase; }
         .nav-links { display: flex; gap: 1.8rem; list-style: none; }
@@ -43,7 +43,7 @@ export default function LandingPage() {
 
         .hero {
           position: relative; overflow: hidden;
-          padding: 7rem 3rem 5rem;
+          padding: 7rem 8% 5rem;
           display: flex; flex-direction: column; align-items: center; text-align: center;
         }
         .hero-pattern {
@@ -100,14 +100,14 @@ export default function LandingPage() {
 
         .stats-strip {
           background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-          padding: 2.5rem 3rem; display: flex; justify-content: center;
+          padding: 2.5rem 8%; display: flex; justify-content: center;
         }
         .stat-item { flex: 1; max-width: 200px; text-align: center; padding: 0 2rem; border-right: 1px solid var(--border); }
         .stat-item:last-child { border-right: none; }
         .stat-num { font-family: var(--serif); font-size: 2.4rem; color: var(--green); line-height: 1; }
         .stat-lbl { font-size: 0.8rem; color: var(--text3); margin-top: 0.3rem; }
 
-        .section { padding: 6rem 3rem; max-width: 1100px; margin: 0 auto; }
+        .section { padding: 6rem 8%; max-width: 1100px; margin: 0 auto; }
         .section-tag { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.2em; color: var(--green); text-transform: uppercase; margin-bottom: 0.8rem; }
         .section-h { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem); line-height: 1.15; margin-bottom: 1rem; }
         .section-sub { color: var(--text2); font-size: 1rem; max-width: 480px; line-height: 1.8; }
@@ -121,7 +121,7 @@ export default function LandingPage() {
         .tl-info strong { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }
         .tl-info span { font-size: 0.8rem; color: var(--text3); }
 
-        .features-bg { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6rem 3rem; }
+        .features-bg { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6rem 8%; }
         .features-inner { max-width: 1100px; margin: 0 auto; }
         .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
         .f-card {
@@ -143,7 +143,7 @@ export default function LandingPage() {
         .hm.y { background: var(--amber-lt); color: var(--amber); }
         .hm.n { background: var(--bg2); color: var(--text3); }
 
-        .roles-section { padding: 6rem 3rem; max-width: 1100px; margin: 0 auto; }
+        .roles-section { padding: 6rem 8%; max-width: 1100px; margin: 0 auto; }
         .roles-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
         .role-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 2rem 1.5rem; text-align: center; transition: all 0.2s; }
         .role-card:hover { box-shadow: var(--shadow); border-color: var(--border2); }
@@ -152,7 +152,7 @@ export default function LandingPage() {
         .role-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
         .role-card p { font-size: 0.8rem; color: var(--text2); line-height: 1.7; }
 
-        .cta-section { background: var(--green); padding: 6rem 3rem; text-align: center; }
+        .cta-section { background: var(--green); padding: 6rem 8%; text-align: center; }
         .cta-section h2 { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3.2rem); color: #fff; margin-bottom: 1rem; max-width: 600px; margin-left: auto; margin-right: auto; }
         .cta-section p { color: rgba(255,255,255,0.75); font-size: 1rem; margin-bottom: 2.5rem; max-width: 440px; margin-left: auto; margin-right: auto; }
         .btn-white { background: #fff; color: var(--green); font-weight: 600; padding: 0.9rem 2.2rem; border-radius: 10px; border: none; font-family: var(--sans); font-size: 1rem; cursor: pointer; transition: all 0.2s; margin: 0 0.5rem; }
@@ -160,7 +160,7 @@ export default function LandingPage() {
         .btn-white-out { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); font-weight: 500; padding: 0.9rem 2.2rem; border-radius: 10px; font-family: var(--sans); font-size: 1rem; cursor: pointer; transition: all 0.2s; margin: 0 0.5rem; }
         .btn-white-out:hover { border-color: rgba(255,255,255,0.8); }
 
-        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 1.8rem 3rem; display: flex; align-items: center; justify-content: space-between; }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 1.8rem 8%; display: flex; align-items: center; justify-content: space-between; }
         .footer-copy { font-size: 0.8rem; color: var(--text3); }
 
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
