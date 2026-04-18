@@ -2,7 +2,10 @@ from fastapi import FastAPI, UploadFile, Form, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.fraud_detector import analyze_document
 
-app = FastAPI(title="Nexus Backend API")
+app = FastAPI(
+    title="Nexus Graduation Portal",
+    version="1.0.0"
+)
 
 # Allow all origins for the hackathon
 app.add_middleware(
@@ -14,8 +17,8 @@ app.add_middleware(
 )
 
 @app.get("/")
-def read_root():
-    return {"message": "Nexus API is running!"}
+def home():
+    return {"message": "Nexus Graduation Portal Backend Running Successfully"}
 
 @app.post("/api/v1/fraud-detect")
 async def detect_fraud(
