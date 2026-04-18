@@ -5,3 +5,8 @@ opencv-python-headless
 Pillow
 pytesseract
 ImageHash
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]

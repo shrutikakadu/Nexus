@@ -5,9 +5,60 @@ export default function LoginPage() {
     const navigate = useNavigate()
     const [role, setRole] = useState('student')
 
-    function handleLogin() {
-        if (role === 'student') navigate('/student')
-        else navigate('/admin')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [error, setError] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+
+    async function handleLogin() {
+        setError('')
+        if (!email || !password) {
+            setError('Please enter both email and password.')
+            return
+        }
+
+        setIsLoading(true)
+        try {
+            // Using fetch to call the backend login API
+            const response = await fetch('http://127.0.0.1:8000/api/v1/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                // Save token and route based on role
+                localStorage.setItem('nexus_token', data.access_token)
+                
+                if (role === 'student') {
+                    navigate('/student')
+                } else {
+                    navigate('/admin')
+                }
+            } else {
+                setError(data.detail || 'Failed to login. Please check credentials.')
+            }
+        } catch (err) {
+            setError('Server is offline. Please make sure the backend is running.')
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // Function to handle rapid Hackathon registration testing
+    async function handleDemoRegister() {
+        try {
+            await fetch('http://127.0.0.1:8000/api/v1/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email || 'test@college.edu', password: password || '12345', role: role })
+            })
+            alert("Demo account registered! You can now log in.")
+        } catch (err) {
+            alert("Registration failed.")
+        }
     }
 
     return (
@@ -81,17 +132,12 @@ export default function LoginPage() {
           font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 0.5rem;
         }
         .btn-auth:hover { background: var(--green-mid); transform: translateY(-1px); }
+        .btn-auth:disabled { opacity: 0.7; cursor: not-allowed; }
 
         .auth-switch { text-align: center; margin-top: 1.2rem; font-size: 0.83rem; color: var(--text3); }
         .auth-switch a { color: var(--green); text-decoration: none; font-weight: 600; cursor: pointer; }
 
-        .divider { display: flex; align-items: center; gap: 0.8rem; margin: 1.2rem 0; }
-        .divider-line { flex: 1; height: 1px; background: var(--border); }
-        .divider span { font-size: 0.78rem; color: var(--text3); }
-
-        .features-list { margin-top: 2.5rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
-        .feature-pill { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: rgba(255,255,255,0.75); }
-        .feature-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); flex-shrink: 0; }
+        .error-msg { background: #fee2e2; color: #b91c1c; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
 
         @media (max-width: 768px) {
           .auth-left { display: none; }
@@ -136,25 +182,39 @@ export default function LoginPage() {
                         </div>
                     </div>
 
+                    {error && <div className="error-msg">{error}</div>}
+
                     <div className="form-group">
                         <label className="form-label">Email address</label>
-                        <input className="form-input" type="email" placeholder={role === 'student' ? 'student@college.edu' : 'faculty@college.edu'} />
+                        <input 
+                            className="form-input" 
+                            type="email" 
+                            placeholder={role === 'student' ? 'student@college.edu' : 'faculty@college.edu'}
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                        />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Password</label>
-                        <input className="form-input" type="password" placeholder="Enter your password" />
+                        <input 
+                            className="form-input" 
+                            type="password" 
+                            placeholder="Enter your password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                        />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                         <a style={{ fontSize: '0.8rem', color: 'var(--green)', cursor: 'pointer', fontWeight: 600 }}>Forgot password?</a>
                     </div>
 
-                    <button className="btn-auth" onClick={handleLogin}>
-                        {role === 'student' ? 'Sign in as Student →' : 'Sign in as Teacher / Admin →'}
+                    <button className="btn-auth" onClick={handleLogin} disabled={isLoading}>
+                        {isLoading ? 'Signing in...' : (role === 'student' ? 'Sign in as Student →' : 'Sign in as Admin →')}
                     </button>
 
                     <div className="auth-switch">
-                        Don't have an account? <a onClick={() => navigate('/login')}>Register here</a>
+                        Don't have an account? <a onClick={handleDemoRegister}>Quick Action: Register with above credentials</a>
                     </div>
                 </div>
             </div>
