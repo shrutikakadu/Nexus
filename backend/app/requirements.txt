@@ -4,7 +4,7 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 passlib[bcrypt]
-pyjwt
+python-jose[cryptography]
 python-multipart
 razorpay
 apscheduler
