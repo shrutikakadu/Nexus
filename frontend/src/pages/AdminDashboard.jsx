@@ -186,7 +186,7 @@ export default function AdminDashboard() {
     // Fetch live pending requests from backend on load
     async function fetchPending() {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/pending-clearances/${adminType}`)
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/v1/admin/pending-clearances/${adminType}`)
         if (res.ok) {
            const liveData = await res.json()
            // Append live database objects to UI list
@@ -216,7 +216,7 @@ export default function AdminDashboard() {
     // If it's a real database item, update status in backend!
     if (student.server_id) {
        try {
-           await fetch(`http://127.0.0.1:8000/api/v1/admin/update-clearance/${student.server_id}?admin_type=${adminType}&status=approved`, {
+           await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/v1/admin/update-clearance/${student.server_id}?admin_type=${adminType}&status=approved`, {
                method: 'PUT'
            })
        } catch (err) {

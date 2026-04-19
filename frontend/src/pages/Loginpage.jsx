@@ -28,7 +28,7 @@ export default function LoginPage() {
         if (!email || !password) { setError('Please enter both email and password.'); return }
         setIsLoading(true)
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, role, admin_role: role !== 'student' ? adminRole : '' })
@@ -71,7 +71,7 @@ export default function LoginPage() {
         if (!email || !password) { setError('Enter email and password to register.'); return }
         setIsLoading(true)
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/auth/register', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, role, admin_role: role !== 'student' ? adminRole : '' })

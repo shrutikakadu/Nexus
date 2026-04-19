@@ -139,7 +139,7 @@ export default function LibraryDashboard() {
             adminApprove(student.studentId, 'Library', 'Library clearance approved. All books returned.')
         }
         // Also update backend
-        fetch(`http://127.0.0.1:8000/api/auth/clearance/update?roll=${student.studentId || student.roll}&dept=Library&new_status=approved&comment=Library+clearance+approved&admin_email=${localStorage.getItem('nexus_email') || ''}`, { method: 'POST' }).catch(() => {})
+        fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/clearance/update?roll=${student.studentId || student.roll}&dept=Library&new_status=approved&comment=Library+clearance+approved&admin_email=${localStorage.getItem('nexus_email') || ''}`, { method: 'POST' }).catch(() => {})
         showToast(`✓ Library clearance approved for ${student.name}`)
     }
 
@@ -153,7 +153,7 @@ export default function LibraryDashboard() {
         if (rejectTarget.studentId) {
             adminReject(rejectTarget.studentId, 'Library', reason)
         }
-        fetch(`http://127.0.0.1:8000/api/auth/clearance/update?roll=${rejectTarget.studentId || rejectTarget.roll}&dept=Library&new_status=rejected&comment=${encodeURIComponent(reason)}&admin_email=${localStorage.getItem('nexus_email') || ''}`, { method: 'POST' }).catch(() => {})
+        fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/clearance/update?roll=${rejectTarget.studentId || rejectTarget.roll}&dept=Library&new_status=rejected&comment=${encodeURIComponent(reason)}&admin_email=${localStorage.getItem('nexus_email') || ''}`, { method: 'POST' }).catch(() => {})
         showToast(`✗ Library clearance rejected for ${rejectTarget.name}`)
         setRejectTarget(null)
     }

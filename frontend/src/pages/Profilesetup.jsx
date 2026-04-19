@@ -46,7 +46,7 @@ export default function ProfileSetup({ editMode = false }) {
     useEffect(() => {
         const roll = localStorage.getItem('nexus_roll')
         if (editMode && roll) {
-            fetch(`http://127.0.0.1:8000/api/auth/profile/${roll}`)
+            fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/profile/${roll}`)
                 .then(r => r.json())
                 .then(data => { if (data.roll) setForm(prev => ({ ...prev, ...data })) })
                 .catch(() => { })
@@ -68,7 +68,7 @@ export default function ProfileSetup({ editMode = false }) {
         setSaving(true)
         setError('')
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/auth/profile', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)

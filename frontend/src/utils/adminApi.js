@@ -3,7 +3,7 @@
  * Import and call fetchRegisteredStudents(deptName) in any admin dashboard.
  */
 
-const API_BASE = 'http://127.0.0.1:8000/api/auth'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/auth` : 'http://127.0.0.1:8000/api/auth'
 
 /**
  * Fetch all registered students from the backend and map them

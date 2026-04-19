@@ -423,7 +423,7 @@ export default function StudentDashboard() {
     if (!roll) { navigate('/profile-setup'); return }
 
     // Fetch latest profile from backend
-    fetch(`http://127.0.0.1:8000/api/auth/profile/${roll}`)
+    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/profile/${roll}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data && data.roll) {
@@ -434,7 +434,7 @@ export default function StudentDashboard() {
       .catch(() => { /* offline — use localStorage cache */ })
 
     // Also fetch clearance status from backend and generate notifications
-    fetch(`http://127.0.0.1:8000/api/auth/clearance/${roll}`)
+    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/clearance/${roll}`)
       .then(r => r.ok ? r.json() : [])
       .then(clearances => {
         if (clearances.length > 0) {
@@ -612,7 +612,7 @@ export default function StudentDashboard() {
     if (!loaded) { showToast('Razorpay failed to load. Check connection.', 'error'); setPayStep('form'); return }
 
     try {
-      const response = await fetch('http://localhost:8000/api/payment/create-order', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/payment/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: payModal.amount, receipt: `receipt_${payModal.id}` })
@@ -630,7 +630,7 @@ export default function StudentDashboard() {
         handler: async (response) => {
           try {
             setPayStep('processing')
-            const verifyRes = await fetch('http://localhost:8000/api/payment/verify-payment', {
+            const verifyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/payment/verify-payment`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
