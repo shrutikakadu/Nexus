@@ -2,49 +2,79 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { studentUploadDocument, getStudentStatus, onStoreUpdate } from '../../utils/clearanceStore'
 
-const STUDENT = function handleLogin() {
-  if (role === 'student') navigate('/student')  // no user data saved!
+// Load student data from localStorage (saved during login or profile setup)
+function getStudentData() {
+  try {
+    const profile = JSON.parse(localStorage.getItem('nexus_profile') || '{}')
+    const email = localStorage.getItem('nexus_email') || ''
+    const roll = localStorage.getItem('nexus_roll') || profile.roll || ''
+    return {
+      name: profile.name || 'Student',
+      roll: roll,
+      email: email,
+      dept: profile.dept || 'Computer Science',
+      batch: profile.batch || '2025',
+      semester: profile.semester || '8',
+      cgpa: profile.cgpa || '8.7',
+      hostel: profile.hostel || 'Day Scholar',
+      phone: profile.phone || '',
+      dob: profile.dob || '',
+      gender: profile.gender || '',
+      college: profile.college || 'Nexus Institute of Technology',
+      clearanceId: profile.clearance_id || `NX-${profile.batch || '2025'}-${(roll || '000').slice(-3)}`,
+      photo: (profile.name || 'S').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST',
+      advisor: profile.advisor || '',
+    }
+  } catch {
+    return {
+      name: 'Student', roll: '', email: '', dept: 'Computer Science',
+      batch: '2025', semester: '8', cgpa: '8.7', hostel: 'Day Scholar',
+      phone: '', dob: '', gender: '', college: 'Nexus Institute of Technology',
+      clearanceId: 'NX-2025-000', photo: 'ST', advisor: '',
+    }
+  }
 }
 
-// CORRECT SEQUENCE as requested
+
+// CORRECT SEQUENCE as requested — ALL start as pending for new students
 const INITIAL_PIPELINE = [
-  { id: 1, dept: 'Library', icon: '📚', status: 'approved', comment: 'All books returned. No dues.' },
-  { id: 2, dept: 'Lab', icon: '🔬', status: 'approved', comment: 'Lab manuals submitted.' },
+  { id: 1, dept: 'Library', icon: '📚', status: 'pending', comment: '' },
+  { id: 2, dept: 'Lab', icon: '🔬', status: 'pending', comment: '' },
   { id: 3, dept: 'Accounts', icon: '💰', status: 'pending', comment: '' },
   { id: 4, dept: 'Hostel', icon: '🏠', status: 'pending', comment: '' },
   { id: 5, dept: 'HOD', icon: '👨‍🏫', status: 'pending', comment: '' },
   { id: 6, dept: 'Principal', icon: '🏛️', status: 'pending', comment: '' },
 ]
 
+// ALL documents start as missing — student must upload them
 const INITIAL_DOCS = [
-  { id: 1, name: 'College ID Card', icon: '🪪', status: 'verified', size: '1.2 MB', type: 'JPG', date: '15 Apr', targetDept: 'Library' },
-  { id: 2, name: 'Library Receipt', icon: '📚', status: 'verified', size: '0.8 MB', type: 'PDF', date: '15 Apr', targetDept: 'Library' },
-  { id: 3, name: 'Lab Manual Return', icon: '🔬', status: 'pending', size: '2.1 MB', type: 'PDF', date: '16 Apr', targetDept: 'Lab' },
+  { id: 1, name: 'College ID Card', icon: '🪪', status: 'missing', size: '', type: '', date: '', targetDept: 'Library' },
+  { id: 2, name: 'Library Receipt', icon: '📚', status: 'missing', size: '', type: '', date: '', targetDept: 'Library' },
+  { id: 3, name: 'Lab Manual Return', icon: '🔬', status: 'missing', size: '', type: '', date: '', targetDept: 'Lab' },
   { id: 4, name: 'Fee Clearance', icon: '💳', status: 'missing', size: '', type: '', date: '', targetDept: 'Accounts' },
   { id: 5, name: 'Hostel No-Dues', icon: '🏠', status: 'missing', size: '', type: '', date: '', targetDept: 'Hostel' },
   { id: 6, name: 'Sports No-Dues', icon: '⚽', status: 'missing', size: '', type: '', date: '', targetDept: 'HOD' },
 ]
 
+// Start with a welcome notification only
 const INITIAL_NOTIFS = [
-  { id: 1, msg: 'Library clearance approved by Dr. Patil.', time: '2h ago', read: false, type: 'success' },
-  { id: 2, msg: 'Lab In-charge approved your submission.', time: '5h ago', read: false, type: 'success' },
-  { id: 3, msg: 'Document "Lab Manual Return" is under review.', time: '1d ago', read: true, type: 'info' },
-  { id: 4, msg: 'Application NX-2025-041 submitted.', time: '2d ago', read: true, type: 'info' },
+  { id: 1, msg: 'Welcome to Nexus! Your clearance application has been created.', time: 'Just now', read: false, type: 'info' },
 ]
 
+// Default dues and fines for every new student
 const DUES = [
   { id: 1, dept: 'Accounts', item: 'Tuition Fee (Sem 8)', amount: 4500, paid: false },
-  { id: 2, dept: 'Library', item: 'Late Return Fine', amount: 150, paid: true },
-  { id: 3, dept: 'Hostel', item: 'Hostel Dues', amount: 650, paid: false },
+  { id: 2, dept: 'Library', item: 'Late Return Fine', amount: 150, paid: false },
+  { id: 3, dept: 'Hostel', item: 'Hostel Mess Dues', amount: 650, paid: false },
+  { id: 4, dept: 'Accounts', item: 'Exam Fee', amount: 1200, paid: false },
+  { id: 5, dept: 'Lab', item: 'Lab Equipment Deposit Refund', amount: 500, paid: false },
 ]
 
 const CERTIFICATES = [
-  { id: 1, name: 'No Dues Certificate', dept: 'All Departments', status: 'pending', desc: 'Issued after all departments approve.', type: 'nodues' },
-  { id: 2, name: 'Bonafide Certificate', dept: 'Academic Office', status: 'ready', desc: 'Confirms enrollment status.', type: 'bonafide' },
-  { id: 3, name: 'Migration Certificate', dept: 'Principal Office', status: 'pending', desc: 'Required for university transfer.', type: 'migration' },
-  { id: 4, name: 'Character Certificate', dept: 'HOD', status: 'pending', desc: 'Issued after HOD approval.', type: 'character' },
-  { id: 5, name: 'Course Completion', dept: 'Academic Office', status: 'ready', desc: 'Confirms completion of B.Tech program.', type: 'completion' },
-  { id: 6, name: 'Provisional Degree', dept: 'Principal Office', status: 'pending', desc: 'Issued after full clearance.', type: 'degree' },
+  { id: 1, name: 'No Dues Certificate', dept: 'All Departments', status: 'pending', desc: 'Issued after all departments approve.', type: 'nodues', requiresAllClear: true },
+  { id: 2, name: 'Bonafide Certificate', dept: 'Academic Office', status: 'ready', desc: 'Confirms enrollment status.', type: 'bonafide', requiresAllClear: false },
+  { id: 3, name: 'Course Completion', dept: 'Academic Office', status: 'ready', desc: 'Confirms completion of B.Tech program.', type: 'completion', requiresAllClear: false },
+  { id: 4, name: 'Provisional Degree', dept: 'Principal Office', status: 'pending', desc: 'Issued after full clearance.', type: 'degree', requiresAllClear: true },
 ]
 
 // Personal documents for Digital Locker
@@ -132,6 +162,8 @@ function generateCertificatePDF(cert, student) {
   }
 
   const body = templates[cert.type] || templates.bonafide
+  const verifyUrl = `${window.location.origin}/verify/${encodeURIComponent(certNo)}`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verifyUrl)}`
 
   const html = `<!DOCTYPE html>
 <html>
@@ -219,7 +251,8 @@ function generateCertificatePDF(cert, student) {
     </div>
   </div>
   <div class="qr-box">
-    <div class="qr-text">Verify at: nexus.verify/${certNo} · This certificate is digitally verified</div>
+    <img src="${qrUrl}" alt="Verification QR Code" width="100" height="100" style="margin-bottom:8px" />
+    <div class="qr-text">Scan to verify authenticity<br/>${certNo}</div>
   </div>
 </div>
 </body>
@@ -310,11 +343,62 @@ function generateAIReceipt(due, student, paymentId) {
 
 export default function StudentDashboard() {
   const navigate = useNavigate()
+  // Always read the CURRENT logged-in student on mount
+  const [studentData, setStudentData] = useState(() => getStudentData())
+  const currentRoll = studentData.roll
   const [tab, setTab] = useState('dashboard')
-  const [pipeline, setPipeline] = useState(INITIAL_PIPELINE)
-  const [docs, setDocs] = useState(INITIAL_DOCS)
-  const [notifs, setNotifs] = useState(INITIAL_NOTIFS)
-  const [dues, setDues] = useState(DUES)
+  const [pipeline, setPipeline] = useState(() => {
+    try {
+      if (currentRoll) {
+        const saved = localStorage.getItem(`nexus_pipeline_${currentRoll}`)
+        if (saved) return JSON.parse(saved)
+      }
+    } catch {}
+    return INITIAL_PIPELINE
+  })
+  const [docs, setDocs] = useState(() => {
+    try {
+      if (currentRoll) {
+        const saved = localStorage.getItem(`nexus_docs_${currentRoll}`)
+        if (saved) return JSON.parse(saved)
+      }
+    } catch {}
+    return INITIAL_DOCS
+  })
+  const [notifs, setNotifs] = useState(() => {
+    try {
+      if (currentRoll) {
+        const saved = localStorage.getItem(`nexus_notifs_${currentRoll}`)
+        if (saved) return JSON.parse(saved)
+      }
+    } catch {}
+    return INITIAL_NOTIFS
+  })
+  const [dues, setDues] = useState(() => {
+    try {
+      if (currentRoll) {
+        const saved = localStorage.getItem(`nexus_dues_${currentRoll}`)
+        if (saved) return JSON.parse(saved)
+      }
+    } catch {}
+    return DUES
+  })
+
+  useEffect(() => {
+    localStorage.setItem(`nexus_dues_${studentData.roll}`, JSON.stringify(dues))
+  }, [dues, studentData.roll])
+  useEffect(() => {
+    if (studentData.roll) localStorage.setItem(`nexus_pipeline_${studentData.roll}`, JSON.stringify(pipeline))
+  }, [pipeline, studentData.roll])
+
+  useEffect(() => {
+    if (studentData.roll) localStorage.setItem(`nexus_docs_${studentData.roll}`, JSON.stringify(docs))
+  }, [docs, studentData.roll])
+
+  useEffect(() => {
+    if (studentData.roll) localStorage.setItem(`nexus_notifs_${studentData.roll}`, JSON.stringify(notifs))
+  }, [notifs, studentData.roll])
+
   const [certs, setCerts] = useState(CERTIFICATES)
   const [lockerDocs, setLockerDocs] = useState(LOCKER_DOCS)
   const [uploadModal, setUploadModal] = useState(false)
@@ -331,34 +415,104 @@ export default function StudentDashboard() {
   const fileInputRef = useRef(null)
   const lockerFileRef = useRef(null)
 
+  // Auth guard + load fresh profile from API
+  useEffect(() => {
+    const token = localStorage.getItem('nexus_token')
+    const roll = localStorage.getItem('nexus_roll')
+    if (!token) { navigate('/login'); return }
+    if (!roll) { navigate('/profile-setup'); return }
+
+    // Fetch latest profile from backend
+    fetch(`http://127.0.0.1:8000/api/auth/profile/${roll}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.roll) {
+          localStorage.setItem('nexus_profile', JSON.stringify(data))
+          setStudentData(getStudentData())
+        }
+      })
+      .catch(() => { /* offline — use localStorage cache */ })
+
+    // Also fetch clearance status from backend and generate notifications
+    fetch(`http://127.0.0.1:8000/api/auth/clearance/${roll}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(clearances => {
+        if (clearances.length > 0) {
+          setPipeline(prev => {
+            const newPipeline = prev.map(p => {
+              const match = clearances.find(c => c.dept === p.dept)
+              if (match && match.status !== 'pending' && match.status !== p.status) {
+                // Generate notification for status change
+                const commentText = match.comment ? ` — "${match.comment}"` : ''
+                let msg = ''
+                let type = 'info'
+                if (match.status === 'approved') {
+                  msg = `✓ ${p.dept} department has approved your clearance!${commentText}`
+                  type = 'success'
+                } else if (match.status === 'rejected') {
+                  msg = `✗ ${p.dept} department has rejected your clearance.${commentText}`
+                  type = 'error'
+                } else if (match.status === 'flagged') {
+                  msg = `⚠️ ${p.dept} department has flagged an issue with your clearance.${commentText}`
+                  type = 'error'
+                }
+                if (msg) {
+                  setNotifs(nPrev => {
+                    if (!nPrev.some(n => n.msg === msg)) {
+                      return [{ id: Date.now() + Math.random(), msg, time: 'Just now', read: false, type }, ...nPrev]
+                    }
+                    return nPrev
+                  })
+                }
+                return { ...p, status: match.status, comment: match.comment || p.comment }
+              }
+              if (match) return { ...p, status: match.status, comment: match.comment || p.comment }
+              return p
+            })
+            return newPipeline
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const unread = notifs.filter(n => !n.read).length
   const clearedCount = pipeline.filter(p => p.status === 'approved').length
   const totalDues = dues.filter(d => !d.paid).reduce((s, d) => s + d.amount, 0)
   const allCleared = pipeline.every(p => p.status === 'approved')
-  const uploadedDocs = docs.filter(d => d.size)
+  const uploadedDocs = docs.filter(d => d.size || pipeline.find(p => p.dept === d.targetDept)?.status === 'approved')
   const pendingDues = dues.filter(d => !d.paid).length
 
   useEffect(() => {
     function syncFromStore() {
-      const status = getStudentStatus(STUDENT.roll)
+      const status = getStudentStatus(studentData.roll)
       if (!status) return
       setPipeline(prev => prev.map(p => {
         const storeStatus = status.clearanceStatus[p.dept]
         if (storeStatus && storeStatus !== p.status) {
           const comment = status.adminComments[p.dept] || p.comment
-
-          if (storeStatus === 'rejected' || storeStatus === 'flagged') {
-            setNotifs(nPrev => {
-               const reasonText = comment ? ` Reason: ${comment}` : '';
-               const action = storeStatus === 'rejected' ? 'rejected' : 'flagged';
-               const msg = `Your ${p.dept} clearance was ${action}.${reasonText}`;
-               if (!nPrev.some(n => n.msg === msg)) {
-                 return [{ id: Date.now() + Math.random(), msg, time: 'Just now', read: false, type: 'error' }, ...nPrev]
-               }
-               return nPrev;
-            });
+          let msg = ''
+          let type = 'info'
+          if (storeStatus === 'approved') {
+            msg = `✓ ${p.dept} department approved your clearance!`
+            type = 'success'
+          } else if (storeStatus === 'rejected') {
+            const reasonText = comment ? ` Reason: ${comment}` : ''
+            msg = `✗ Your ${p.dept} clearance was rejected.${reasonText}`
+            type = 'error'
+          } else if (storeStatus === 'flagged') {
+            const reasonText = comment ? ` Reason: ${comment}` : ''
+            msg = `⚠️ Your ${p.dept} clearance was flagged.${reasonText}`
+            type = 'error'
           }
-
+          if (msg) {
+            setNotifs(nPrev => {
+              if (!nPrev.some(n => n.msg === msg)) {
+                return [{ id: Date.now() + Math.random(), msg, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), read: false, type }, ...nPrev]
+              }
+              return nPrev
+            })
+          }
           return { ...p, status: storeStatus, comment }
         }
         return p
@@ -405,17 +559,21 @@ export default function StudentDashboard() {
 
     const processUpload = (dataUrl) => {
       studentUploadDocument({
-        studentId: STUDENT.roll, studentName: STUDENT.name, initials: STUDENT.photo,
-        avatarClass: 'blue-bg', dept: STUDENT.dept, batch: STUDENT.batch,
+        studentId: studentData.roll, studentName: studentData.name, initials: studentData.photo,
+        avatarClass: 'blue-bg', dept: studentData.dept, batch: studentData.batch,
         docName: targetDoc?.name || selectedFile?.name || 'Document',
         docType: fileType, docSize: fileSize, targetDept, fileDataUrl: dataUrl,
       })
+      // College ID Card is auto-verified on upload
+      const isCollegeId = targetDoc?.name === 'College ID Card'
+      const uploadStatus = isCollegeId ? 'verified' : 'pending'
       setDocs(prev => prev.map(d => d.id === uploadTarget
-        ? { ...d, status: 'pending', size: fileSize, type: fileType, date: 'Today', fileName: selectedFile?.name }
+        ? { ...d, status: uploadStatus, size: fileSize, type: fileType, date: 'Today', fileName: selectedFile?.name }
         : d))
       setUploadModal(false); setUploadTarget(null); setSelectedFile(null); setUploading(false)
-      showToast(`✓ "${targetDoc?.name}" uploaded to ${targetDept}!`)
-      setNotifs(prev => [{ id: Date.now(), msg: `Document "${targetDoc?.name}" sent to ${targetDept} for review.`, time: 'Just now', read: false, type: 'info' }, ...prev])
+      const statusMsg = isCollegeId ? 'auto-verified' : `sent to ${targetDept} for review`
+      showToast(`✓ "${targetDoc?.name}" uploaded — ${statusMsg}!`)
+      setNotifs(prev => [{ id: Date.now(), msg: `Document "${targetDoc?.name}" ${statusMsg}.`, time: 'Just now', read: false, type: isCollegeId ? 'success' : 'info' }, ...prev])
     }
 
     if (selectedFile) {
@@ -486,7 +644,7 @@ export default function StudentDashboard() {
             }
           } catch { showToast('Error verifying payment', 'error'); setPayStep('form') }
         },
-        prefill: { name: STUDENT.name, email: STUDENT.email, contact: STUDENT.phone.replace(/\D/g, '') },
+        prefill: { name: studentData.name, email: studentData.email, contact: studentData.phone?.replace(/\D/g, '') || '' },
         theme: { color: '#1a7a4a' }
       }
       const rz = new window.Razorpay(options)
@@ -524,15 +682,22 @@ export default function StudentDashboard() {
           const isActive = s.status === 'pending' && pipeline.slice(0, i).every(x => x.status === 'approved')
           const cls = isActive ? 'active' : s.status
           const size = mini ? 22 : 30
+          
+          let bg = '#edf7f1', border = B, text = T3, shadow = 'none', icon = s.id, lbl = 'Awaiting', lblColor = T3
+          if (cls === 'approved') { bg = GM; border = GM; text = S; icon = '✓'; lbl = 'Cleared'; lblColor = GM }
+          else if (cls === 'rejected') { bg = RL; border = R; text = R; icon = '✗'; lbl = 'Rejected'; lblColor = R }
+          else if (cls === 'active') { bg = AL; border = AM; text = AM; shadow = `0 0 0 5px ${AL}`; lbl = 'In Review'; lblColor = AM }
+          else if (cls === 'pending') { bg = AL; border = AM; text = AM; lbl = 'Awaiting'; lblColor = AM }
+
           return (
             <div key={s.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, position: 'relative' }}>
-              {i < pipeline.length - 1 && <div style={{ position: 'absolute', top: size / 2 - 1, left: '50%', width: '100%', height: 2, background: s.status === 'approved' ? GM : '#d4ead9', zIndex: 0 }} />}
-              <div style={{ width: size, height: size, borderRadius: '50%', background: cls === 'approved' ? GM : cls === 'active' ? S : '#edf7f1', border: cls === 'active' ? `2px solid ${GM}` : cls === 'approved' ? `2px solid ${GM}` : `2px solid ${B}`, color: cls === 'approved' ? S : cls === 'active' ? G : T3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: mini ? '0.55rem' : '0.7rem', fontWeight: 700, zIndex: 1, position: 'relative', boxShadow: cls === 'active' ? `0 0 0 5px ${GL}` : 'none' }}>
-                {cls === 'approved' ? '✓' : s.id}
+              {i < pipeline.length - 1 && <div style={{ position: 'absolute', top: size / 2 - 1, left: '50%', width: '100%', height: 2, background: s.status === 'approved' ? GM : '#f5d99a', zIndex: 0 }} />}
+              <div style={{ width: size, height: size, borderRadius: '50%', background: bg, border: `2px solid ${border}`, color: text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: mini ? '0.55rem' : '0.7rem', fontWeight: 700, zIndex: 1, position: 'relative', boxShadow: shadow }}>
+                {icon}
               </div>
               {!mini && <>
-                <div style={{ fontSize: '0.62rem', color: cls === 'pending' && !isActive ? T3 : T2, fontWeight: isActive || cls === 'approved' ? 600 : 400, textAlign: 'center' }}>{s.dept}</div>
-                <div style={{ fontSize: '0.58rem', color: cls === 'approved' ? GM : isActive ? AM : T3 }}>{cls === 'approved' ? 'Cleared' : isActive ? 'In Review' : 'Awaiting'}</div>
+                <div style={{ fontSize: '0.62rem', color: T2, fontWeight: cls === 'approved' || cls === 'active' ? 600 : 400, textAlign: 'center' }}>{s.dept}</div>
+                <div style={{ fontSize: '0.58rem', color: lblColor }}>{lbl}</div>
               </>}
             </div>
           )
@@ -559,10 +724,10 @@ export default function StudentDashboard() {
           ))}
           <div style={{ background: `linear-gradient(135deg,${G} 0%,#0f4a2a 100%)`, borderRadius: 18, padding: '1.25rem', color: S, position: 'relative', overflow: 'hidden' }}>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.6rem', letterSpacing: '0.2em', opacity: 0.6, marginBottom: 10 }}>COLLEGE ID</div>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: G, marginBottom: 8 }}>{STUDENT.photo}</div>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>{STUDENT.name}</div>
-            <div style={{ fontSize: '0.72rem', opacity: 0.7, marginBottom: 6 }}>{STUDENT.dept}</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.7rem', opacity: 0.8 }}>{STUDENT.roll}</div>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: G, marginBottom: 8 }}>{studentData.photo}</div>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>{studentData.name}</div>
+            <div style={{ fontSize: '0.72rem', opacity: 0.7, marginBottom: 6 }}>{studentData.dept}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.7rem', opacity: 0.8 }}>{studentData.roll}</div>
           </div>
         </div>
         <div style={card}>
@@ -573,21 +738,31 @@ export default function StudentDashboard() {
           <PipelineBar />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+          {/* Helper to check if a document is overridden as verified by pipeline approval */}
+          {(() => {
+            const getDocStatus = (d) => {
+              const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
+              if (pipeStatus === 'approved') return 'verified';
+              return d.size ? d.status : 'missing';
+            };
+            return <>
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Recent Documents</div>
               <button style={btnSm} onClick={() => setTab('documents')}>View All</button>
             </div>
-            {docs.slice(0, 4).map(d => (
+            {docs.slice(0, 4).map(d => {
+              const status = getDocStatus(d);
+              return (
               <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: `1px solid ${BG}` }}>
                 <span style={{ fontSize: 16 }}>{d.icon}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{d.name}</div>
-                  <div style={{ fontSize: '0.68rem', color: T3 }}>{d.size ? `${d.type} · ${d.size}` : 'Not uploaded'}</div>
+                  <div style={{ fontSize: '0.68rem', color: T3 }}>{d.size ? `${d.type} · ${d.size}` : (status === 'verified' ? 'Cleared by Admin' : 'Not uploaded')}</div>
                 </div>
-                <span style={badge(d.size ? d.status : 'missing')}>{d.size ? d.status : 'missing'}</span>
+                <span style={badge(status)}>{status}</span>
               </div>
-            ))}
+            )})}
           </div>
           <div style={card}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '1rem' }}>Pending Actions</div>
@@ -600,7 +775,7 @@ export default function StudentDashboard() {
                 <button style={btn(R, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => setTab('dues')}>Pay Now</button>
               </div>
             )}
-            {docs.filter(d => !d.size).slice(0, 2).map(d => (
+            {docs.filter(d => !d.size && getDocStatus(d) !== 'verified').slice(0, 2).map(d => (
               <div key={d.id} style={{ background: AL, borderRadius: 10, padding: '0.85rem 1rem', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: '0.82rem', fontWeight: 600, color: AM }}>{d.name} Missing</div>
@@ -609,10 +784,11 @@ export default function StudentDashboard() {
                 <button style={btn(AM, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button>
               </div>
             ))}
-            {totalDues === 0 && docs.filter(d => !d.size).length === 0 && (
+            {totalDues === 0 && docs.filter(d => !d.size && getDocStatus(d) !== 'verified').length === 0 && (
               <div style={{ textAlign: 'center', padding: '1.5rem', color: G, fontWeight: 600 }}>🎉 No pending actions!</div>
             )}
           </div>
+          </>})()}
         </div>
       </div>
     )
@@ -627,7 +803,7 @@ export default function StudentDashboard() {
             <span style={badge(allCleared ? 'approved' : 'pending')}>{allCleared ? 'Cleared' : 'In Progress'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-            {[['Student', STUDENT.name], ['Roll No.', STUDENT.roll], ['Department', STUDENT.dept], ['Batch', STUDENT.batch], ['Clearance ID', STUDENT.clearanceId], ['Submitted', '15 Apr 2025']].map(([k, v]) => (
+            {[['Student', studentData.name], ['Roll No.', studentData.roll], ['Department', studentData.dept], ['Batch', studentData.batch], ['Clearance ID', studentData.clearanceId], ['Submitted', '15 Apr 2025']].map(([k, v]) => (
               <div key={k} style={{ background: BG, borderRadius: 10, padding: '0.85rem 1rem' }}>
                 <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k}</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 700, color: k === 'Clearance ID' ? G : T, fontFamily: k === 'Clearance ID' ? "'DM Mono',monospace" : 'inherit' }}>{v}</div>
@@ -665,20 +841,24 @@ export default function StudentDashboard() {
             <button style={btn(G, S)} onClick={() => setUploadModal(true)}>+ Upload Document</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
-            {docs.map(d => (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '1rem', borderRadius: 12, border: `1px solid ${d.size ? B2 : B}`, background: d.size ? GX : S }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: d.size ? GL : BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{d.icon}</div>
+            {docs.map(d => {
+              const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
+              const status = pipeStatus === 'approved' ? 'verified' : (d.size ? d.status : 'missing');
+              const isVerified = status === 'verified';
+              return (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '1rem', borderRadius: 12, border: `1px solid ${d.size || isVerified ? B2 : B}`, background: d.size || isVerified ? GX : S }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: d.size || isVerified ? GL : BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{d.icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 2 }}>{d.name}</div>
-                  <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 5 }}>{d.size ? `${d.type} · ${d.size} · ${d.date}` : 'Not uploaded yet'}</div>
-                  <span style={badge(d.size ? d.status : 'missing')}>{d.size ? d.status : 'missing'}</span>
+                  <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 5 }}>{d.size ? `${d.type} · ${d.size} · ${d.date}` : (isVerified ? 'Cleared by Admin' : 'Not uploaded yet')}</div>
+                  <span style={badge(status)}>{status}</span>
                 </div>
-                {d.size
+                {d.size || isVerified
                   ? <div style={{ width: 24, height: 24, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G, fontSize: '0.8rem' }}>✓</div>
                   : <button style={btnSm} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button>
                 }
               </div>
-            ))}
+            )})}
           </div>
         </div>
       </div>
@@ -693,7 +873,8 @@ export default function StudentDashboard() {
     const statusConfig = {
       approved: { bg: GL, border: B2, dot: GM, label: 'Cleared', text: G },
       inreview: { bg: AL, border: '#f5d99a', dot: AM, label: 'In Review', text: AM },
-      waiting: { bg: '#f8fafc', border: '#e2e8f0', dot: '#94a3b8', label: 'Awaiting', text: '#64748b' },
+      waiting: { bg: AL, border: '#f5d99a', dot: AM, label: 'Awaiting', text: AM },
+      rejected: { bg: RL, border: '#f5c6c2', dot: R, label: 'Rejected', text: R },
       flagged: { bg: RL, border: '#f5c6c2', dot: R, label: 'Flagged', text: R },
     }
     const cleared = pipeline.filter(p => p.status === 'approved').length
@@ -734,6 +915,7 @@ export default function StudentDashboard() {
                 </div>
                 {h.comment && <div style={{ fontSize: '0.65rem', color: T3, fontStyle: 'italic', marginTop: 6 }}>"{h.comment}"</div>}
                 {h.disp === 'approved' && <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: GM, display: 'flex', alignItems: 'center', justifyContent: 'center', color: S, fontSize: '0.6rem' }}>✓</div>}
+                {h.disp === 'rejected' && <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: R, display: 'flex', alignItems: 'center', justifyContent: 'center', color: S, fontSize: '0.6rem' }}>✗</div>}
               </div>
             )
           })}
@@ -767,7 +949,7 @@ export default function StudentDashboard() {
               {d.paid
                 ? <div style={{ display: 'flex', gap: 6 }}>
                   <span style={badge('approved')}>Paid ✓</span>
-                  <button style={btnSm} onClick={() => generateAIReceipt(d, STUDENT, d.paymentId)}>↓ Receipt</button>
+                  <button style={btnSm} onClick={() => generateAIReceipt(d, studentData, d.paymentId)}>↓ Receipt</button>
                 </div>
                 : <button style={btn(R, S)} onClick={() => openPayModal(d)}>Pay Now</button>
               }
@@ -785,7 +967,7 @@ export default function StudentDashboard() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ color: G, fontWeight: 700 }}>₹{d.amount}</div>
-                  <button style={btnSm} onClick={() => generateAIReceipt(d, STUDENT, d.paymentId)}>↓ Download Receipt</button>
+                  <button style={btnSm} onClick={() => generateAIReceipt(d, studentData, d.paymentId)}>↓ Download Receipt</button>
                 </div>
               </div>
             ))}
@@ -820,12 +1002,17 @@ export default function StudentDashboard() {
   }
 
   function TabCertificates() {
-    const readyCerts = certs.filter(c => c.status === 'ready')
-    const pendingCerts = certs.filter(c => c.status === 'pending')
+    // Dynamically compute cert status: certs that require all clearances check allCleared
+    const computedCerts = certs.map(c => ({
+      ...c,
+      status: c.requiresAllClear ? (allCleared ? 'ready' : 'pending') : c.status,
+    }))
+    const readyCerts = computedCerts.filter(c => c.status === 'ready')
+    const pendingCerts = computedCerts.filter(c => c.status === 'pending')
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-          {[['Total Certificates', certs.length, T], ['Ready to Download', readyCerts.length, G], ['Pending Approval', pendingCerts.length, AM]].map(([lbl, val, color]) => (
+          {[['Total Certificates', computedCerts.length, T], ['Ready to Download', readyCerts.length, G], ['Pending Approval', pendingCerts.length, AM]].map(([lbl, val, color]) => (
             <div key={lbl} style={{ ...card, padding: '1.1rem 1.4rem', textAlign: 'center' }}>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2.2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div>
               <div style={{ fontSize: '0.75rem', color: T3, fontWeight: 600 }}>{lbl}</div>
@@ -845,12 +1032,12 @@ export default function StudentDashboard() {
                     <div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button style={btn(G, S, { fontSize: '0.78rem', padding: '0.4rem 1rem' })}
-                        onClick={() => { generateCertificatePDF(c, STUDENT); showToast(`${c.name} downloaded!`) }}>
+                        onClick={() => { generateCertificatePDF(c, studentData); showToast(`${c.name} downloaded!`) }}>
                         ↓ Download PDF
                       </button>
                     </div>
                     <div style={{ marginTop: 8, fontSize: '0.65rem', color: T3, fontFamily: "'DM Mono',monospace" }}>
-                      ID: {STUDENT.roll}-{c.type.toUpperCase()}
+                      ID: {studentData.roll}-{c.type.toUpperCase()}
                     </div>
                   </div>
                   <span style={badge('approved')}>Ready</span>
@@ -872,7 +1059,7 @@ export default function StudentDashboard() {
                     <div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: AL, borderRadius: 7, padding: '0.4rem 0.75rem' }}>
                       <div style={{ width: 6, height: 6, borderRadius: '50%', background: AM }} />
-                      <span style={{ fontSize: '0.72rem', color: AM, fontWeight: 600 }}>Awaiting department approval</span>
+                      <span style={{ fontSize: '0.72rem', color: AM, fontWeight: 600 }}>{c.requiresAllClear ? 'Requires all department clearances' : 'Awaiting department approval'}</span>
                     </div>
                   </div>
                   <span style={badge('pending')}>Pending</span>
@@ -995,21 +1182,21 @@ export default function StudentDashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
           {unread > 0 && <div style={{ background: AM, color: S, borderRadius: 100, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }} onClick={() => setTab('notifications')}>{unread} new</div>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '0.4rem 0.75rem', borderRadius: 10, border: `1px solid ${B}`, background: profileOpen ? GX : S }} onClick={() => setProfileOpen(!profileOpen)}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{STUDENT.photo}</div>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: T2 }}>{STUDENT.name}</span>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: T2 }}>{studentData.name}</span>
             <span style={{ fontSize: '0.7rem', color: T3 }}>{profileOpen ? '▲' : '▼'}</span>
           </div>
-          <button style={{ background: 'none', border: `1px solid ${B}`, borderRadius: 8, padding: '0.4rem 0.85rem', fontSize: '0.8rem', color: T3, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => navigate('/login')}>Log out</button>
+          <button style={{ background: 'none', border: `1px solid ${B}`, borderRadius: 8, padding: '0.4rem 0.85rem', fontSize: '0.8rem', color: T3, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { localStorage.removeItem('nexus_token'); localStorage.removeItem('nexus_role'); localStorage.removeItem('nexus_email'); localStorage.removeItem('nexus_roll'); localStorage.removeItem('nexus_profile'); navigate('/login') }}>Log out</button>
           {profileOpen && (
             <div style={{ position: 'absolute', top: 50, right: 0, background: S, border: `1px solid ${B}`, borderRadius: 16, width: 320, boxShadow: '0 8px 40px rgba(0,0,0,0.12)', zIndex: 200 }} onClick={e => e.stopPropagation()}>
               <div style={{ background: `linear-gradient(135deg,${G},#0f4a2a)`, borderRadius: '16px 16px 0 0', padding: '1.25rem', color: S, display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{ width: 48, height: 48, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: G }}>{STUDENT.photo}</div>
-                <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>{STUDENT.name}</div><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{STUDENT.email}</div></div>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
+                <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>{studentData.name}</div><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{studentData.email}</div></div>
               </div>
               <div style={{ padding: '1rem 1.25rem' }}>
-                {[['Roll No.', STUDENT.roll], ['DOB', STUDENT.dob], ['Gender', STUDENT.gender], ['Phone', STUDENT.phone], ['Hostel', STUDENT.hostel], ['Department', STUDENT.dept], ['Batch', STUDENT.batch], ['CGPA', STUDENT.cgpa]].map(([k, v]) => (
+                {[['Roll No.', studentData.roll], ['DOB', studentData.dob], ['Gender', studentData.gender], ['Phone', studentData.phone], ['Hostel', studentData.hostel], ['Department', studentData.dept], ['Batch', studentData.batch], ['CGPA', studentData.cgpa]].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: `1px solid ${BG}`, fontSize: '0.82rem' }}>
-                    <span style={{ color: T3 }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span>
+                    <span style={{ color: T3 }}>{k}</span><span style={{ fontWeight: 600 }}>{v || '—'}</span>
                   </div>
                 ))}
               </div>
@@ -1032,8 +1219,8 @@ export default function StudentDashboard() {
             </button>
           ))}
           <div style={{ marginTop: 'auto', background: BG, borderRadius: 11, padding: '0.85rem', display: 'flex', gap: 9, alignItems: 'center' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{STUDENT.photo}</div>
-            <div><div style={{ fontSize: '0.78rem', fontWeight: 700 }}>{STUDENT.name.split(' ')[0]}</div><div style={{ fontSize: '0.68rem', color: T3 }}>{STUDENT.roll}</div></div>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
+            <div><div style={{ fontSize: '0.78rem', fontWeight: 700 }}>{studentData.name.split(' ')[0]}</div><div style={{ fontSize: '0.68rem', color: T3 }}>{studentData.roll}</div></div>
           </div>
         </aside>
 
@@ -1043,7 +1230,7 @@ export default function StudentDashboard() {
             <div style={{ marginBottom: '1.5rem' }}>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.7rem', marginBottom: 3 }}>{TABS.find(t => t.id === tab)?.label}</div>
               <div style={{ fontSize: '0.8rem', color: T3 }}>
-                {tab === 'dashboard' && `Clearance ID: ${STUDENT.clearanceId} · ${clearedCount} of ${pipeline.length} cleared`}
+                {tab === 'dashboard' && `Clearance ID: ${studentData.clearanceId} · ${clearedCount} of ${pipeline.length} cleared`}
                 {tab === 'heatmap' && 'Live view of department clearance status'}
                 {tab === 'certificates' && `${certs.filter(c => c.status === 'ready').length} ready · ${certs.filter(c => c.status === 'pending').length} pending`}
                 {tab === 'documents' && `${uploadedDocs.length} of ${docs.length} uploaded`}
@@ -1134,7 +1321,7 @@ export default function StudentDashboard() {
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button style={{ ...btn(GX, G), flex: 1, border: `1px solid ${B2}` }} onClick={() => generateAIReceipt(payModal, STUDENT, lastPaymentId)}>
+                  <button style={{ ...btn(GX, G), flex: 1, border: `1px solid ${B2}` }} onClick={() => generateAIReceipt(payModal, studentData, lastPaymentId)}>
                     ↓ Download AI Receipt
                   </button>
                   <button style={{ ...btn(G, S), flex: 1 }} onClick={() => { setPayModal(null); showToast('Receipt saved!') }}>Done</button>

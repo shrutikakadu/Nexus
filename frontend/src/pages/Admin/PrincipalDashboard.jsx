@@ -6,7 +6,9 @@ import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import CertificateGenerator from '../../components/CertificateGenerator'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
+import RejectModal from '../../components/RejectModal'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -35,6 +37,12 @@ export default function PrincipalDashboard() {
     const [certStudent, setCertStudent] = useState(null)
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
+    const [apiStudents, setApiStudents] = useState([])
+    const [rejectTarget, setRejectTarget] = useState(null)
+
+    useEffect(() => {
+        fetchRegisteredStudents('Principal').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + ALL_STUDENTS.filter(x => x.hodApproval === 'Yes').length) })
+    }, [])
 
     useEffect(() => {
         function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Principal')) }
@@ -49,20 +57,20 @@ export default function PrincipalDashboard() {
         if (s.hodApproval !== 'Yes') { showToast(`⚠️ Cannot approve — ${s.name} missing HOD approval`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
         if (s.studentId) adminApprove(s.studentId, 'Principal', 'Final graduation approved by Principal.')
+        updateClearanceAPI(s.studentId || s.roll, 'Principal', 'approved', 'Final graduation approved by Principal')
         showToast(`🎓 Final graduation approved for ${s.name}!`)
     }
     function handleReject(s) {
-        const reason = window.prompt(`Please enter the reason for rejecting ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
-        setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'Principal', reason)
-        showToast(`✗ Graduation rejected for ${s.name}`)
+        setRejectTarget(s)
     }
-    function handleFlag(s) {
-        const reason = window.prompt(`Please enter the reason for flagging ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
-        if (s.studentId) adminFlag(s.studentId, 'Principal', reason)
-        showToast(`⚠️ Issue flagged for ${s.name}`)
+
+    function confirmReject(reason) {
+        if (!rejectTarget) return
+        setRejectedIds(p => [...p, rejectTarget.id])
+        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'Principal', reason)
+        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Principal', 'rejected', reason)
+        showToast(`✗ Graduation rejected for ${rejectTarget.name}`)
+        setRejectTarget(null)
     }
 
     const storeStudents = storeSubmissions
@@ -75,7 +83,8 @@ export default function PrincipalDashboard() {
             statusLabel: s.statusForRole === 'approved' ? '🎓 Graduated' : 'Pending Principal',
             heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
         }))
-    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll))]
+    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
+    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !ALL_STUDENTS.some(s => s.roll === a.roll))]
 
     const tableData = allStudents.map(s => ({
         ...s,
@@ -84,7 +93,6 @@ export default function PrincipalDashboard() {
         statusLabel: approvedIds.includes(s.id) ? '🎓 Graduated' : rejectedIds.includes(s.id) ? 'Rejected' : s.statusLabel,
     }))
 
-    const isFullHeatmap = activeItem === 'heatmap'
     const isCertificates = activeItem === 'certificates'
 
     return (
@@ -102,13 +110,12 @@ export default function PrincipalDashboard() {
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
                 {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
+                    <div style={{ maxWidth: 600 }}><NotificationPanel role="Principal" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
                 )}
                 {activeItem === 'reports' && (
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
                 )}
 
-                {isFullHeatmap && <ClearanceHeatmap students={ALL_STUDENTS} />}
 
                 {isCertificates && (
                     <div>
@@ -148,7 +155,6 @@ export default function PrincipalDashboard() {
                                                 ? <button className="btn btn-sm btn-solid" onClick={e => { e.stopPropagation(); setCertStudent(row); setActiveItem('certificates') }}>📜 Certificate</button>
                                                 : <>
                                                     <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
-                                                    <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                                     <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                                 </>
                                             }
@@ -178,15 +184,11 @@ export default function PrincipalDashboard() {
                                         ) : (
                                             <>
                                                 <button className="btn btn-solid" onClick={() => handleApprove(selected)}>🎓 Approve Graduation →</button>
-                                                <button className="btn btn-amber" onClick={() => handleFlag(selected)}>⚠️ Flag Issue</button>
                                                 <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
                                             </>
                                         )}
                                     </div>
                                 </div>
-                            </div>
-                            <div className="content-right">
-                                <ClearanceHeatmap selectedStudent={selected} />
                             </div>
                         </div>
                     </>
@@ -194,6 +196,7 @@ export default function PrincipalDashboard() {
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
             {viewingDocs && <DocumentViewer role="Principal" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
+            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Principal Clearance" />
         </div>
     )
 }

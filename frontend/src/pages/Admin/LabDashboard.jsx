@@ -5,7 +5,9 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
+import RejectModal from '../../components/RejectModal'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -31,6 +33,12 @@ export default function LabDashboard() {
     const [pendingCount, setPendingCount] = useState(STUDENTS.length)
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
+    const [apiStudents, setApiStudents] = useState([])
+    const [rejectTarget, setRejectTarget] = useState(null)
+
+    useEffect(() => {
+        fetchRegisteredStudents('Lab').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + STUDENTS.length) })
+    }, [])
 
     useEffect(() => {
         function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Lab')) }
@@ -43,22 +51,23 @@ export default function LabDashboard() {
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
         if (s.labManual !== 'Submitted' || s.equipment !== 'Returned') { showToast(`⚠️ Cannot approve — ${s.name} has pending lab submissions`); return }
+        if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded lab documents`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
         if (s.studentId) adminApprove(s.studentId, 'Lab', 'Lab clearance approved. All equipment returned.')
+        updateClearanceAPI(s.studentId || s.roll, 'Lab', 'approved', 'Lab clearance approved')
         showToast(`✓ Lab clearance approved for ${s.name}`)
     }
     function handleReject(s) {
-        const reason = window.prompt(`Please enter the reason for rejecting ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
-        setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'Lab', reason)
-        showToast(`✗ Lab clearance rejected for ${s.name}`)
+        setRejectTarget(s)
     }
-    function handleFlag(s) {
-        const reason = window.prompt(`Please enter the reason for flagging ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
-        if (s.studentId) adminFlag(s.studentId, 'Lab', reason)
-        showToast(`⚠️ Issue flagged for ${s.name}`)
+
+    function confirmReject(reason) {
+        if (!rejectTarget) return
+        setRejectedIds(p => [...p, rejectTarget.id])
+        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'Lab', reason)
+        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Lab', 'rejected', reason)
+        showToast(`✗ Lab clearance rejected for ${rejectTarget.name}`)
+        setRejectTarget(null)
     }
 
     const storeStudents = storeSubmissions
@@ -70,7 +79,8 @@ export default function LabDashboard() {
             statusLabel: s.statusForRole === 'approved' ? 'Cleared' : 'Pending',
             heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
         }))
-    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll))]
+    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
+    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !STUDENTS.some(s => s.roll === a.roll))]
 
     const tableData = allStudents.map(s => ({
         ...s,
@@ -91,7 +101,7 @@ export default function LabDashboard() {
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
                 {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
+                    <div style={{ maxWidth: 600 }}><NotificationPanel role="Lab" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
                 )}
                 {activeItem === 'reports' && (
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
@@ -115,7 +125,6 @@ export default function LabDashboard() {
                                                 {row.fromStore ? '📄 View Docs' : 'View'}
                                             </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
-                                            <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}
@@ -146,6 +155,7 @@ export default function LabDashboard() {
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
             {viewingDocs && <DocumentViewer role="Lab" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
+            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Lab Clearance" />
         </div>
     )
 }

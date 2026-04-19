@@ -643,7 +643,7 @@
 .heatmap-cell.approved { background: var(--green-lt); border: 1px solid var(--border2); }
 .heatmap-cell.pending { background: var(--amber-lt); border: 1px solid #f0d090; }
 .heatmap-cell.rejected { background: var(--red-lt); border: 1px solid #f0b0aa; }
-.heatmap-cell.locked { background: var(--bg2); border: 1px solid var(--border); }
+.heatmap-cell.locked { background: var(--amber-lt); border: 1px solid #f0d090; }
 
 .heatmap-dept {
   font-size: 0.72rem;
@@ -653,7 +653,7 @@
 .heatmap-cell.approved .heatmap-dept { color: var(--green); }
 .heatmap-cell.pending .heatmap-dept { color: var(--amber); }
 .heatmap-cell.rejected .heatmap-dept { color: var(--red); }
-.heatmap-cell.locked .heatmap-dept { color: var(--text3); }
+.heatmap-cell.locked .heatmap-dept { color: var(--amber); }
 
 .heatmap-status {
   font-size: 0.62rem;
@@ -664,7 +664,7 @@
 .heatmap-cell.approved .heatmap-status { color: var(--green-mid); }
 .heatmap-cell.pending .heatmap-status { color: var(--amber); }
 .heatmap-cell.rejected .heatmap-status { color: var(--red); }
-.heatmap-cell.locked .heatmap-status { color: var(--text3); }
+.heatmap-cell.locked .heatmap-status { color: var(--amber); }
 
 /* Full heatmap table (HOD/Principal) */
 .heatmap-table {

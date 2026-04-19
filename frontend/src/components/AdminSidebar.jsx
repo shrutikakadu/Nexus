@@ -62,15 +62,6 @@ export default function AdminSidebar({ role = 'library', activeItem = 'dashboard
                         Certificates
                     </button>
                 )}
-                {(role === 'hod' || role === 'principal') && (
-                    <button
-                        className={`sidebar-link ${activeItem === 'heatmap' ? 'active' : ''}`}
-                        onClick={() => onNavigate?.('heatmap')}
-                    >
-                        <span className="sidebar-link-icon">🗺️</span>
-                        Clearance Heatmap
-                    </button>
-                )}
             </nav>
 
             {/* Footer */}

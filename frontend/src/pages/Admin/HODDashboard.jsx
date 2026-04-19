@@ -5,7 +5,9 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import { getSubmissionsForAdmin, adminApprove, adminReject, adminFlag, onStoreUpdate } from '../../utils/clearanceStore'
+import RejectModal from '../../components/RejectModal'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
+import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -33,6 +35,12 @@ export default function HODDashboard() {
     const [comment, setComment] = useState('')
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
+    const [apiStudents, setApiStudents] = useState([])
+    const [rejectTarget, setRejectTarget] = useState(null)
+
+    useEffect(() => {
+        fetchRegisteredStudents('HOD').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + ALL_STUDENTS.length) })
+    }, [])
 
     useEffect(() => {
         function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('HOD')) }
@@ -45,24 +53,24 @@ export default function HODDashboard() {
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
         if (s.project !== 'Submitted' || s.internship !== 'Completed') { showToast(`⚠️ Cannot approve — ${s.name} has incomplete academic requirements`); return }
+        if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded required documents`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
         if (s.studentId) adminApprove(s.studentId, 'HOD', comment || 'HOD approval granted. Forwarded to Principal.')
+        updateClearanceAPI(s.studentId || s.roll, 'HOD', 'approved', comment || 'HOD approval granted')
         showToast(`✓ HOD approval granted for ${s.name} — forwarded to Principal`)
     }
     function handleReject(s) {
-        const reason = comment || window.prompt(`Please enter the reason for rejecting ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for rejection`); return; }
-        setRejectedIds(p => [...p, s.id])
-        if (s.studentId) adminReject(s.studentId, 'HOD', reason)
-        showToast(`✗ Rejected with comment for ${s.name}`)
-        setComment('')
+        setRejectTarget(s)
     }
-    function handleFlag(s) {
-        const reason = comment || window.prompt(`Please enter the reason for flagging ${s.name}:`);
-        if (!reason) { showToast(`⚠️ Reason is required for flagging`); return; }
-        if (s.studentId) adminFlag(s.studentId, 'HOD', reason)
-        showToast(`⚠️ Issue flagged for ${s.name}`)
+
+    function confirmReject(reason) {
+        if (!rejectTarget) return
+        setRejectedIds(p => [...p, rejectTarget.id])
+        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'HOD', reason)
+        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'HOD', 'rejected', reason)
+        showToast(`✗ HOD clearance rejected for ${rejectTarget.name}`)
         setComment('')
+        setRejectTarget(null)
     }
 
     const storeStudents = storeSubmissions
@@ -74,7 +82,8 @@ export default function HODDashboard() {
             statusLabel: s.statusForRole === 'approved' ? 'HOD Approved' : 'Pending HOD',
             heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
         }))
-    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll))]
+    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
+    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !ALL_STUDENTS.some(s => s.roll === a.roll))]
 
     const tableData = allStudents.map(s => ({
         ...s,
@@ -95,13 +104,10 @@ export default function HODDashboard() {
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
                 {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
+                    <div style={{ maxWidth: 600 }}><NotificationPanel role="HOD" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
                 )}
                 {activeItem === 'reports' && (
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
-                )}
-                {activeItem === 'heatmap' && (
-                    <ClearanceHeatmap students={ALL_STUDENTS} />
                 )}
 
                 {(activeItem === 'dashboard' || activeItem === 'clearances') && (
@@ -123,7 +129,6 @@ export default function HODDashboard() {
                                                 {row.fromStore ? '📄 View Docs' : '📁 View Project'}
                                             </button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
-                                            <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); handleFlag(row) }}>⚠️ Flag</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}
@@ -154,13 +159,9 @@ export default function HODDashboard() {
                                     </div>
                                     <div className="detail-actions">
                                         <button className="btn btn-solid" onClick={() => handleApprove(selected)}>✓ Approve Graduation →</button>
-                                        <button className="btn btn-amber" onClick={() => handleFlag(selected)}>⚠️ Flag Issue</button>
-                                        <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject with Comment</button>
+                                        <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="content-right">
-                                <ClearanceHeatmap selectedStudent={selected} />
                             </div>
                         </div>
                     </>
@@ -168,6 +169,7 @@ export default function HODDashboard() {
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
             {viewingDocs && <DocumentViewer role="HOD" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
+            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject HOD Clearance" />
         </div>
     )
 }

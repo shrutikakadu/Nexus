@@ -10,12 +10,15 @@ import HostelDashboard from './pages/Admin/HostelDashboard'
 import HODDashboard from './pages/Admin/HODDashboard'
 import PrincipalDashboard from './pages/Admin/PrincipalDashboard'
 import ProfileSetup from './pages/ProfileSetup'
+import VerifyCertificate from './pages/VerifyCertificate'
 
 export default function App() {
     return (
         <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/profile-setup" element={<ProfileSetup />} />
+            <Route path="/edit-profile" element={<ProfileSetup editMode={true} />} />
             <Route path="/student" element={<StudentDashboard />} />
             {/* Legacy admin route */}
             <Route path="/admin" element={<AdminDashboard />} />
@@ -26,10 +29,10 @@ export default function App() {
             <Route path="/admin/hostel" element={<HostelDashboard />} />
             <Route path="/admin/hod" element={<HODDashboard />} />
             <Route path="/admin/principal" element={<PrincipalDashboard />} />
-            {/* Fallback */}
+            {/* Public Certificate Verification */}
+            <Route path="/verify/:certId" element={<VerifyCertificate />} />
+            {/* Fallback — must be LAST */}
             <Route path="*" element={<Navigate to="/" replace />} />
-            <Route path="/profile-setup" element={<ProfileSetup />} />
-            <Route path="/edit-profile" element={<ProfileSetup editMode={true} />} />
         </Routes>
     )
 }

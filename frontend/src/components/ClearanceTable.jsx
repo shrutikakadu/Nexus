@@ -17,8 +17,8 @@ export default function ClearanceTable({
             (row.name?.toLowerCase().includes(search.toLowerCase())) ||
             (row.roll?.toLowerCase().includes(search.toLowerCase()))
 
-        if (activeTab === 'pending') return matchesSearch && !approvedIds.includes(row.id) && row.status !== 'rejected'
-        if (activeTab === 'approved') return matchesSearch && approvedIds.includes(row.id)
+        if (activeTab === 'pending') return matchesSearch && row.status === 'pending'
+        if (activeTab === 'approved') return matchesSearch && row.status === 'approved'
         if (activeTab === 'rejected') return matchesSearch && row.status === 'rejected'
         return matchesSearch
     })
