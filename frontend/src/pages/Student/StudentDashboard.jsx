@@ -483,6 +483,12 @@ export default function StudentDashboard() {
   const uploadedDocs = docs.filter(d => d.size || pipeline.find(p => p.dept === d.targetDept)?.status === 'approved')
   const pendingDues = dues.filter(d => !d.paid).length
 
+  const getDocStatus = (d) => {
+    const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
+    if (pipeStatus === 'approved') return 'verified';
+    return d.size ? d.status : 'missing';
+  };
+
   useEffect(() => {
     function syncFromStore() {
       const status = getStudentStatus(studentData.roll)
@@ -738,14 +744,6 @@ export default function StudentDashboard() {
           <PipelineBar />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-          {/* Helper to check if a document is overridden as verified by pipeline approval */}
-          {(() => {
-            const getDocStatus = (d) => {
-              const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
-              if (pipeStatus === 'approved') return 'verified';
-              return d.size ? d.status : 'missing';
-            };
-            return <>
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Recent Documents</div>
@@ -788,7 +786,6 @@ export default function StudentDashboard() {
               <div style={{ textAlign: 'center', padding: '1.5rem', color: G, fontWeight: 600 }}>🎉 No pending actions!</div>
             )}
           </div>
-          </>})()}
         </div>
       </div>
     )
