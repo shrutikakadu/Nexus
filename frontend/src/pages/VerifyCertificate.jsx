@@ -56,8 +56,7 @@ export default function VerifyCertificate() {
         <div style={{ padding: '2.5rem' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-              <div style={{ width: 40, height: 40, border: `3px solid ${GL}`, borderTopColor: G, borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' }}></div>
-              <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+              <div style={{ width: 40, height: 40, border: `3px solid ${GL}`, borderTopColor: G, borderRadius: '50%', margin: '0 auto 1.5rem' }}></div>
               <div style={{ color: T2, fontWeight: 500 }}>Verifying authenticity...</div>
               <div style={{ fontSize: '0.85rem', color: T3, marginTop: 4 }}>Checking cryptographic signature for {certId}</div>
             </div>

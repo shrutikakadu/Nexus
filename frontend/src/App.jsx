@@ -9,7 +9,7 @@ import AccountsDashboard from './pages/Admin/AccountsDashboard'
 import HostelDashboard from './pages/Admin/HostelDashboard'
 import HODDashboard from './pages/Admin/HODDashboard'
 import PrincipalDashboard from './pages/Admin/PrincipalDashboard'
-import ProfileSetup from './pages/ProfileSetup'
+import ProfileSetup from './pages/Profilesetup'
 import VerifyCertificate from './pages/VerifyCertificate'
 
 export default function App() {
