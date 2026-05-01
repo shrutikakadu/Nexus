@@ -4,9 +4,7 @@ import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
-import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const ALL_STUDENTS = [
@@ -30,17 +28,8 @@ export default function HODDashboard() {
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(ALL_STUDENTS.length)
     const [viewingDocs, setViewingDocs] = useState(null)
-<<<<<<< HEAD
-    const [apiStudents, setApiStudents] = useState([])
-    const [rejectTarget, setRejectTarget] = useState(null)
-
-    useEffect(() => {
-        fetchRegisteredStudents('HOD').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + ALL_STUDENTS.length) })
-    }, [])
-=======
     const [flagModal, setFlagModal] = useState(null)
     const [storeSubmissions, setStoreSubmissions] = useState([])
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     useEffect(() => {
         function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('HOD')) }
@@ -52,27 +41,6 @@ export default function HODDashboard() {
 
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
-<<<<<<< HEAD
-        if (s.project !== 'Submitted' || s.internship !== 'Completed') { showToast(`⚠️ Cannot approve — ${s.name} has incomplete academic requirements`); return }
-        if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded required documents`); return }
-        setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
-        if (s.studentId) adminApprove(s.studentId, 'HOD', comment || 'HOD approval granted. Forwarded to Principal.')
-        updateClearanceAPI(s.studentId || s.roll, 'HOD', 'approved', comment || 'HOD approval granted')
-        showToast(`✓ HOD approval granted for ${s.name} — forwarded to Principal`)
-    }
-    function handleReject(s) {
-        setRejectTarget(s)
-    }
-
-    function confirmReject(reason) {
-        if (!rejectTarget) return
-        setRejectedIds(p => [...p, rejectTarget.id])
-        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'HOD', reason)
-        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'HOD', 'rejected', reason)
-        showToast(`✗ HOD clearance rejected for ${rejectTarget.name}`)
-        setComment('')
-        setRejectTarget(null)
-=======
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
         if (s.studentId) adminApprove(s.studentId, 'HOD', 'HOD academic clearance granted.')
         showToast(`✓ HOD approval granted for ${s.name} — forwarded to Principal`)
@@ -88,7 +56,6 @@ export default function HODDashboard() {
         if (s.studentId) adminReject(s.studentId, 'HOD', flagModal.reason)
         showToast(`✗ Rejected with comment for ${s.name}`)
         setFlagModal(null)
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
     }
 
     const storeStudents = storeSubmissions
@@ -100,8 +67,7 @@ export default function HODDashboard() {
             statusLabel: s.statusForRole === 'approved' ? 'HOD Cleared' : 'Pending HOD',
             heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
         }))
-    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
-    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !ALL_STUDENTS.some(s => s.roll === a.roll))]
+    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll))]
 
     const tableData = allStudents.map(s => ({
         ...s,
@@ -118,18 +84,6 @@ export default function HODDashboard() {
                     <div className="admin-header-left"><h1>HOD Dashboard</h1><p>Department of Computer Science — Academic clearance &amp; project review</p></div>
                     <div className="admin-header-actions"><button className="btn btn-outline" onClick={() => showToast('Report exported')}>↓ Export</button></div>
                 </div>
-<<<<<<< HEAD
-                {activeItem === 'students' && (
-                    <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
-                )}
-                {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel role="HOD" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
-                )}
-                {activeItem === 'reports' && (
-                    <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
-                )}
-=======
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
                 {(activeItem === 'dashboard' || activeItem === 'clearances') && (
                     <>
@@ -168,31 +122,7 @@ export default function HODDashboard() {
                                             <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
                                         </div>
                                     </div>
-<<<<<<< HEAD
-                                    <div className="detail-section-label">Academic Details</div>
-                                    <div className="detail-info-grid">
-                                        <div className="detail-info-item"><div className="detail-info-label">Project Submission</div><div className="detail-info-value" style={{ color: selected.project === 'Submitted' ? 'var(--green)' : 'var(--red)' }}>{selected.project}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Internship</div><div className="detail-info-value" style={{ color: selected.internship === 'Completed' ? 'var(--green)' : 'var(--red)' }}>{selected.internship}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">CGPA</div><div className="detail-info-value">8.7 / 10.0</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Backlogs</div><div className="detail-info-value" style={{ color: 'var(--green)' }}>None</div></div>
-                                    </div>
-                                    <div style={{ marginTop: '1rem' }}>
-                                        <div className="detail-section-label" style={{ marginTop: 0 }}>Rejection Comment (if rejecting)</div>
-                                        <textarea
-                                            placeholder="Add reason for rejection..."
-                                            value={comment}
-                                            onChange={e => setComment(e.target.value)}
-                                            style={{ width: '100%', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1.5px solid var(--border)', fontFamily: 'var(--sans)', fontSize: '0.82rem', color: 'var(--text)', resize: 'vertical', minHeight: 60, boxSizing: 'border-box', outline: 'none' }}
-                                        />
-                                    </div>
-                                    <div className="detail-actions">
-                                        <button className="btn btn-solid" onClick={() => handleApprove(selected)}>✓ Approve Graduation →</button>
-                                        <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
-                                    </div>
-                                </div>
-=======
                                 )}
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
                             </div>
                         </div>
                     </>
@@ -212,7 +142,6 @@ export default function HODDashboard() {
             )}
 
             {viewingDocs && <DocumentViewer role="HOD" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
-            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject HOD Clearance" />
         </div>
     )
 }

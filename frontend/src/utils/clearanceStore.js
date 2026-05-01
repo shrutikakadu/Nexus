@@ -526,24 +526,6 @@ export function adminReject(studentId, adminRole, comment = '') {
   return true
 }
 
-/** Admin flags a student's clearance */
-export function adminFlag(studentId, adminRole, comment = '') {
-  const store = getStore()
-  const submission = store.submissions.find(s => s.studentId === studentId)
-  if (!submission) return false
-
-  submission.clearanceStatus[adminRole] = 'flagged'
-  if (comment) submission.adminComments[adminRole] = comment
-
-  // Mark relevant docs as flagged
-  submission.documents.forEach(d => {
-    if (d.targetDept === adminRole) d.status = 'flagged'
-  })
-
-  saveStore(store)
-  return true
-}
-
 /** Get a file's data URL by docId */
 export function getUploadedFile(docId) {
   const store = getStore()

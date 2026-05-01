@@ -5,9 +5,7 @@ import ClearanceTable from '../../components/ClearanceTable'
 import ClearanceHeatmap from '../../components/ClearanceHeatmap'
 import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
-import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
-import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const STUDENTS = [
@@ -34,12 +32,6 @@ export default function HostelDashboard() {
     const [pendingCount, setPendingCount] = useState(3)
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
-    const [apiStudents, setApiStudents] = useState([])
-    const [rejectTarget, setRejectTarget] = useState(null)
-
-    useEffect(() => {
-        fetchRegisteredStudents('Hostel').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + STUDENTS.filter(x => x.statusLabel !== 'Day Scholar').length) })
-    }, [])
 
     useEffect(() => {
         function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Hostel')) }
@@ -52,23 +44,14 @@ export default function HostelDashboard() {
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
         if (s.messDues !== '₹0' || s.damage !== 'None') { showToast(`⚠️ Cannot approve — ${s.name} has hostel dues/damage`); return }
-        if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded hostel no-dues documents`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
         if (s.studentId) adminApprove(s.studentId, 'Hostel', 'Hostel clearance approved. Room vacated.')
-        updateClearanceAPI(s.studentId || s.roll, 'Hostel', 'approved', 'Hostel clearance approved')
         showToast(`✓ Hostel clearance approved for ${s.name}`)
     }
     function handleReject(s) {
-        setRejectTarget(s)
-    }
-
-    function confirmReject(reason) {
-        if (!rejectTarget) return
-        setRejectedIds(p => [...p, rejectTarget.id])
-        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'Hostel', reason)
-        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Hostel', 'rejected', reason)
-        showToast(`✗ Hostel clearance rejected for ${rejectTarget.name}`)
-        setRejectTarget(null)
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Hostel', 'Hostel clearance rejected.')
+        showToast(`✗ Hostel clearance rejected for ${s.name}`)
     }
 
     const storeStudents = storeSubmissions
@@ -80,8 +63,7 @@ export default function HostelDashboard() {
             statusLabel: s.statusForRole === 'approved' ? 'Cleared' : 'Pending',
             heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
         }))
-    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
-    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !STUDENTS.some(s => s.roll === a.roll))]
+    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll))]
 
     const tableData = allStudents.map(s => ({
         ...s,
@@ -102,7 +84,7 @@ export default function HostelDashboard() {
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
                 {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel role="Hostel" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
+                    <div style={{ maxWidth: 600 }}><NotificationPanel onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
                 )}
                 {activeItem === 'reports' && (
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
@@ -157,7 +139,6 @@ export default function HostelDashboard() {
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
             {viewingDocs && <DocumentViewer role="Hostel" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
-            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Hostel Clearance" />
         </div>
     )
 }

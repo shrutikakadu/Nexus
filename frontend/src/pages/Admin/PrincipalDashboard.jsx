@@ -5,9 +5,7 @@ import ClearanceTable from '../../components/ClearanceTable'
 import NotificationPanel from '../../components/NotificationPanel'
 import CertificateGenerator from '../../components/CertificateGenerator'
 import DocumentViewer from '../../components/DocumentViewer'
-import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
-import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const COLUMNS = [
@@ -27,16 +25,7 @@ export default function PrincipalDashboard() {
     const [certStudent, setCertStudent] = useState(null)
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
-<<<<<<< HEAD
-    const [apiStudents, setApiStudents] = useState([])
-    const [rejectTarget, setRejectTarget] = useState(null)
-
-    useEffect(() => {
-        fetchRegisteredStudents('Principal').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + ALL_STUDENTS.filter(x => x.hodApproval === 'Yes').length) })
-    }, [])
-=======
     const [flagModal, setFlagModal] = useState(null)
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     useEffect(() => {
         function loadSubmissions() { 
@@ -58,25 +47,6 @@ export default function PrincipalDashboard() {
 
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
-<<<<<<< HEAD
-        if (s.hodApproval !== 'Yes') { showToast(`⚠️ Cannot approve — ${s.name} missing HOD approval`); return }
-        setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
-        if (s.studentId) adminApprove(s.studentId, 'Principal', 'Final graduation approved by Principal.')
-        updateClearanceAPI(s.studentId || s.roll, 'Principal', 'approved', 'Final graduation approved by Principal')
-        showToast(`🎓 Final graduation approved for ${s.name}!`)
-    }
-    function handleReject(s) {
-        setRejectTarget(s)
-    }
-
-    function confirmReject(reason) {
-        if (!rejectTarget) return
-        setRejectedIds(p => [...p, rejectTarget.id])
-        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'Principal', reason)
-        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Principal', 'rejected', reason)
-        showToast(`✗ Graduation rejected for ${rejectTarget.name}`)
-        setRejectTarget(null)
-=======
         if (s.studentId) {
             const res = adminApprove(s.studentId, 'Principal', 'Final graduation approved by Principal.')
             if (res.success) {
@@ -97,7 +67,6 @@ export default function PrincipalDashboard() {
         if (s.studentId) adminReject(s.studentId, 'Principal', flagModal.reason)
         showToast(`✗ Graduation rejected for ${s.name}`)
         setFlagModal(null)
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
     }
 
     const tableData = storeSubmissions
@@ -112,20 +81,6 @@ export default function PrincipalDashboard() {
             statusLabel: approvedIds.includes(`store_${s.studentId}`) ? '🎓 Graduated' : rejectedIds.includes(`store_${s.studentId}`) ? 'Rejected' : (s.statusForRole === 'approved' ? '🎓 Graduated' : 'Pending Principal'),
             documents: s.relevantDocs, fromStore: true,
         }))
-<<<<<<< HEAD
-    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
-    const allStudents = [...ALL_STUDENTS, ...storeStudents.filter(ss => !ALL_STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !ALL_STUDENTS.some(s => s.roll === a.roll))]
-
-    const tableData = allStudents.map(s => ({
-        ...s,
-        status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
-        statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
-        statusLabel: approvedIds.includes(s.id) ? '🎓 Graduated' : rejectedIds.includes(s.id) ? 'Rejected' : s.statusLabel,
-    }))
-
-    const isCertificates = activeItem === 'certificates'
-=======
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     return (
         <div className="admin-layout">
@@ -136,22 +91,7 @@ export default function PrincipalDashboard() {
                     <div className="admin-header-actions"><button className="btn btn-outline" onClick={() => showToast('Report exported')}>↓ Export</button></div>
                 </div>
 
-<<<<<<< HEAD
-                {activeItem === 'students' && (
-                    <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
-                )}
-                {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel role="Principal" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
-                )}
-                {activeItem === 'reports' && (
-                    <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
-                )}
-
-
-                {isCertificates && (
-=======
                 {activeItem === 'certificates' && (
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
                     <div>
                         <div style={{ marginBottom: '1rem' }}>
                             <div className="card-label">Select student to generate certificate</div>
@@ -211,31 +151,7 @@ export default function PrincipalDashboard() {
                                             )}
                                         </div>
                                     </div>
-<<<<<<< HEAD
-                                    <div className="detail-section-label">Graduation Details</div>
-                                    <div className="detail-info-grid">
-                                        <div className="detail-info-item"><div className="detail-info-label">Department</div><div className="detail-info-value">{selected.dept}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">HOD Approval</div><div className="detail-info-value" style={{ color: selected.hodApproval === 'Yes' ? 'var(--green)' : 'var(--red)' }}>{selected.hodApproval === 'Yes' ? 'Granted ✓' : 'Pending'}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">CGPA</div><div className="detail-info-value">{selected.cgpa} / 10.0</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Batch</div><div className="detail-info-value">{selected.batch}</div></div>
-                                    </div>
-                                    <div className="detail-actions">
-                                        {approvedIds.includes(selected.id) ? (
-                                            <button className="btn btn-solid" onClick={() => { setCertStudent(selected); setActiveItem('certificates') }}>
-                                                📜 Generate Certificate
-                                            </button>
-                                        ) : (
-                                            <>
-                                                <button className="btn btn-solid" onClick={() => handleApprove(selected)}>🎓 Approve Graduation →</button>
-                                                <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-=======
                                 )}
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
                         </div>
                     </>
                 )}
@@ -252,7 +168,6 @@ export default function PrincipalDashboard() {
                 </div>
             )}
             {viewingDocs && <DocumentViewer role="Principal" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
-            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Principal Clearance" />
         </div>
     )
 }

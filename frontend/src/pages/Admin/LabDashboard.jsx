@@ -3,9 +3,7 @@ import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
 import DocumentViewer from '../../components/DocumentViewer'
-import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
-import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
 
 const COLUMNS = [
@@ -23,16 +21,7 @@ export default function LabDashboard() {
     const [toast, setToast] = useState({ msg: '', show: false })
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
-<<<<<<< HEAD
-    const [apiStudents, setApiStudents] = useState([])
-    const [rejectTarget, setRejectTarget] = useState(null)
-
-    useEffect(() => {
-        fetchRegisteredStudents('Lab').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + STUDENTS.length) })
-    }, [])
-=======
     const [flagModal, setFlagModal] = useState(null)
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     useEffect(() => {
         function loadSubmissions() { 
@@ -53,26 +42,6 @@ export default function LabDashboard() {
 
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
-<<<<<<< HEAD
-        if (s.labManual !== 'Submitted' || s.equipment !== 'Returned') { showToast(`⚠️ Cannot approve — ${s.name} has pending lab submissions`); return }
-        if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded lab documents`); return }
-        setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
-        if (s.studentId) adminApprove(s.studentId, 'Lab', 'Lab clearance approved. All equipment returned.')
-        updateClearanceAPI(s.studentId || s.roll, 'Lab', 'approved', 'Lab clearance approved')
-        showToast(`✓ Lab clearance approved for ${s.name}`)
-    }
-    function handleReject(s) {
-        setRejectTarget(s)
-    }
-
-    function confirmReject(reason) {
-        if (!rejectTarget) return
-        setRejectedIds(p => [...p, rejectTarget.id])
-        if (rejectTarget.studentId) adminReject(rejectTarget.studentId, 'Lab', reason)
-        updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Lab', 'rejected', reason)
-        showToast(`✗ Lab clearance rejected for ${rejectTarget.name}`)
-        setRejectTarget(null)
-=======
         if (s.studentId) {
             const res = adminApprove(s.studentId, 'Lab', 'Lab clearance approved. All equipment returned.')
             if (res.success) {
@@ -93,7 +62,6 @@ export default function LabDashboard() {
         if (s.studentId) adminReject(s.studentId, 'Lab', flagModal.reason)
         showToast(`✗ Lab clearance rejected for ${s.name}`)
         setFlagModal(null)
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
     }
 
     const tableData = storeSubmissions
@@ -106,18 +74,6 @@ export default function LabDashboard() {
             statusLabel: approvedIds.includes(`store_${s.studentId}`) ? 'Cleared' : rejectedIds.includes(`store_${s.studentId}`) ? 'Rejected' : (s.statusForRole === 'approved' ? 'Cleared' : 'Pending'),
             documents: s.relevantDocs, fromStore: true,
         }))
-<<<<<<< HEAD
-    const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
-    const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !STUDENTS.some(s => s.roll === a.roll))]
-
-    const tableData = allStudents.map(s => ({
-        ...s,
-        status: approvedIds.includes(s.id) ? 'approved' : rejectedIds.includes(s.id) ? 'rejected' : 'pending',
-        statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
-        statusLabel: approvedIds.includes(s.id) ? 'Cleared' : rejectedIds.includes(s.id) ? 'Rejected' : s.statusLabel,
-    }))
-=======
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     return (
         <div className="admin-layout">
@@ -127,18 +83,6 @@ export default function LabDashboard() {
                     <div className="admin-header-left"><h1>Lab Dashboard</h1><p>Verify lab manual submissions and equipment returns</p></div>
                     <div className="admin-header-actions"><button className="btn btn-outline" onClick={() => showToast('Report exported')}>↓ Export</button></div>
                 </div>
-<<<<<<< HEAD
-                {activeItem === 'students' && (
-                    <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
-                )}
-                {activeItem === 'notifications' && (
-                    <div style={{ maxWidth: 600 }}><NotificationPanel role="Lab" onSend={msg => showToast(`Notification sent: "${msg}"`)} /></div>
-                )}
-                {activeItem === 'reports' && (
-                    <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
-                )}
-=======
->>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
                 {(activeItem === 'dashboard' || activeItem === 'clearances') && (
                     <>
@@ -193,7 +137,6 @@ export default function LabDashboard() {
                 </div>
             )}
             {viewingDocs && <DocumentViewer role="Lab" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
-            <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Lab Clearance" />
         </div>
     )
 }

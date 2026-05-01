@@ -28,30 +28,28 @@ export default function LoginPage() {
         if (!email || !password) { setError('Please enter both email and password.'); return }
         setIsLoading(true)
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/login`, {
+            const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, role, admin_role: role !== 'student' ? adminRole : '' })
+                body: JSON.stringify({ email, password })
             })
             const data = await response.json()
 
             if (response.ok) {
                 localStorage.setItem('nexus_token', data.access_token)
+                localStorage.setItem('nexus_role', data.role === 'student' ? 'student' : adminRole)
                 localStorage.setItem('nexus_email', email)
 
                 if (role === 'student') {
-                    localStorage.setItem('nexus_role', 'student')
                     if (!data.profile_complete) {
+                        // First time — go to profile setup
                         localStorage.setItem('nexus_roll', data.roll || '')
                         navigate('/profile-setup')
                     } else {
                         localStorage.setItem('nexus_roll', data.roll)
-                        if (data.profile) localStorage.setItem('nexus_profile', JSON.stringify(data.profile))
                         navigate('/student')
                     }
                 } else {
-                    localStorage.setItem('nexus_role', data.admin_role || adminRole)
-                    if (data.admin_profile) localStorage.setItem('nexus_admin_profile', JSON.stringify(data.admin_profile))
                     navigate(ROLE_ROUTES[adminRole])
                 }
             } else {
@@ -69,34 +67,21 @@ export default function LoginPage() {
 
     async function handleRegister() {
         if (!email || !password) { setError('Enter email and password to register.'); return }
-        setIsLoading(true)
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/register`, {
+            const res = await fetch('http://127.0.0.1:8000/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, role, admin_role: role !== 'student' ? adminRole : '' })
+                body: JSON.stringify({ email, password, role })
             })
             const data = await res.json()
             if (res.ok) {
                 setError('')
-                // Auto-login after registration
-                localStorage.setItem('nexus_token', data.access_token)
-                localStorage.setItem('nexus_email', email)
-
-                if (role === 'student') {
-                    localStorage.setItem('nexus_role', 'student')
-                    navigate('/profile-setup')
-                } else {
-                    localStorage.setItem('nexus_role', data.admin_role || adminRole)
-                    navigate(ROLE_ROUTES[adminRole])
-                }
+                alert('Account created! You can now log in.')
             } else {
                 setError(data.detail || 'Registration failed.')
             }
         } catch {
             setError('Backend offline.')
-        } finally {
-            setIsLoading(false)
         }
     }
 

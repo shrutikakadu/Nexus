@@ -70,7 +70,7 @@ export default function ClearanceHeatmap({ students = [], selectedStudent = null
                                 </td>
                                 {depts.map(d => {
                                     const st = heat[d] || 'locked'
-                                    const dotColor = st === 'approved' ? 'green' : st === 'rejected' ? 'red' : 'amber'
+                                    const dotColor = st === 'approved' ? 'green' : st === 'pending' ? 'amber' : st === 'rejected' ? 'red' : 'gray'
                                     return (
                                         <td key={d} style={{ textAlign: 'center' }}>
                                             <span className={`heatmap-dot ${dotColor}`} title={st} />
