@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate, getAdminNotifications, adminMarkNotificationsRead, processDuesCSV } from '../utils/clearanceStore'
+import DocumentViewer from '../components/DocumentViewer'
 
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
@@ -139,43 +141,39 @@ const STYLES = `
 .adm-toast.visible { opacity: 1; transform: translateY(0); }
 `
 
-const DUMMY_STUDENTS = [
-  { id: 'hs', server_id: null, initials: 'HS', avClass: 'adm-av-g', name: 'Hritani Sharma', roll: '2021CS042', meta: 'Submitted 2 days ago', stages: ['done','act','pend'] },
-  { id: 'rk', server_id: null, initials: 'RK', avClass: 'adm-av-b', name: 'Rohit Kumar',    roll: '2021CS017', meta: 'Submitted 1 day ago',  stages: ['done','act','pend'] },
-]
 
-const DOCS = [
-  { name: 'student_id_card.pdf',  meta: 'PDF · 340 KB · Uploaded Apr 16' },
-  { name: 'library_receipt.jpeg', meta: 'JPEG · 180 KB · Uploaded Apr 16' },
-  { name: 'lab_manual.pdf',       meta: 'PDF · 1.2 MB · Uploaded Apr 16' },
-]
 
 const HEATMAP = [
   { dept: 'Library',      status: 'g', label: 'Cleared ✓' },
-  { dept: 'Lab In-charge',status: 'g', label: 'Cleared ✓' },
+  { dept: 'Lab',          status: 'g', label: 'Cleared ✓' },
   { dept: 'HOD',          status: 'y', label: 'Pending…'  },
   { dept: 'Accounts',     status: 'g', label: 'Cleared ✓' },
   { dept: 'Principal',    status: 'n', label: 'Waiting'   },
   { dept: 'Hostel',       status: 'g', label: 'Cleared ✓' },
 ]
 
-const DUES = [
-  { name: 'Neha Patel',  amt: 'Library · ₹340', status: 'red',   label: 'Unpaid' },
-  { name: 'Karan Joshi', amt: 'Hostel · ₹800',  status: 'red',   label: 'Unpaid' },
-  { name: 'Tanya Roy',   amt: 'Library · ₹120', status: 'green', label: 'Paid'   },
-]
+const DUES = []
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('pending')
   const [approved, setApproved] = useState([])
-  const [studentsList, setStudentsList] = useState(DUMMY_STUDENTS)
-  const [selected, setSelected] = useState(DUMMY_STUDENTS[0])
+  const [studentsList, setStudentsList] = useState([])
+  const [selected, setSelected] = useState(null)
   const [toast, setToast] = useState({ msg: '', show: false })
-  const [pendingCount, setPendingCount] = useState(18)
-  const [clearedCount, setClearedCount] = useState(89)
+  const [pendingCount, setPendingCount] = useState(0)
+  const [clearedCount, setClearedCount] = useState(0)
+  const [viewingDocs, setViewingDocs] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
+  const [flagModal, setFlagModal] = useState(null) // { student, reason: '' }
+  const [csvLoading, setCsvLoading] = useState(false)
 
-  const adminType = "library_admin" // Hardcoded for hackathon demo
+  const rawRole = localStorage.getItem('nexus_role') || 'library'
+  const roleMap = { library: 'Library', lab: 'Lab', accounts: 'Accounts', hostel: 'Hostel', hod: 'HOD', principal: 'Principal' }
+  const adminRole = roleMap[rawRole] || 'Library'
+  const labelMap = { library: 'Library Admin', lab: 'Lab In-Charge', accounts: 'Accounts Dept', hostel: 'Hostel Warden', hod: 'HOD', principal: 'Principal' }
+  const displayRole = labelMap[rawRole] || 'Admin'
 
   function showToast(msg) {
     setToast({ msg, show: true })
@@ -183,55 +181,93 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
-    // Fetch live pending requests from backend on load
-    async function fetchPending() {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/v1/admin/pending-clearances/${adminType}`)
-        if (res.ok) {
-           const liveData = await res.json()
-           // Append live database objects to UI list
-           const formatted = liveData.map(item => ({
-              id: `db-${item.id}`,
-              server_id: item.id,
-              initials: 'DB',
-              avClass: 'adm-av-p',
-              name: `Student ID: ${item.student_id}`,
-              roll: 'LIVE DB',
-              meta: 'Fetched just now',
-              stages: ['act','pend','pend']
-           }))
-           setStudentsList([...formatted, ...DUMMY_STUDENTS])
-           setPendingCount(liveData.length + DUMMY_STUDENTS.length)
-        }
-      } catch (err) {
-        console.error("Failed to connect to backend", err)
+    function load() {
+      const subs = getSubmissionsForAdmin(adminRole)
+      const formatted = subs.map(item => ({
+        id: item.id,
+        server_id: item.studentId,
+        initials: item.initials,
+        avClass: 'adm-av-p',
+        name: item.studentName,
+        roll: item.studentId,
+        meta: item.documents.length > 0 ? `Uploaded ${item.documents.length} docs` : 'No docs yet',
+        stages: ['done', 'act', 'pend'],
+        clearanceStatus: item.clearanceStatus,
+        documents: item.documents,
+        dues: item.dues || []
+      }))
+      setStudentsList(formatted)
+
+      const pending = formatted.filter(s => s.clearanceStatus[adminRole] === 'pending')
+      const cleared = formatted.filter(s => s.clearanceStatus[adminRole] === 'approved')
+      const flagged = formatted.filter(s => s.clearanceStatus[adminRole] === 'rejected')
+      
+      setPendingCount(pending.length)
+      setClearedCount(cleared.length)
+
+      let currentList = []
+      if (activeTab === 'pending') currentList = pending
+      if (activeTab === 'flagged') currentList = flagged
+      if (activeTab === 'cleared') currentList = cleared
+
+      if (selected) {
+        const stillInTab = currentList.find(s => s.id === selected.id)
+        if (stillInTab) setSelected(stillInTab)
+        else setSelected(currentList.length > 0 ? currentList[0] : null)
+      } else {
+        setSelected(currentList.length > 0 ? currentList[0] : null)
       }
+
+      const notifs = getAdminNotifications(adminRole)
+      setNotifications(notifs)
+      setUnreadNotifs(notifs.filter(n => !n.read).length)
     }
-    fetchPending()
-  }, [])
+    load()
+    return onStoreUpdate(load)
+  }, [adminRole, activeTab, selected])
 
   async function handleApprove(student) {
     if (approved.includes(student.id)) return
 
-    // If it's a real database item, update status in backend!
     if (student.server_id) {
-       try {
-           await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/v1/admin/update-clearance/${student.server_id}?admin_type=${adminType}&status=approved`, {
-               method: 'PUT'
-           })
-       } catch (err) {
-           console.error("Failed to approve online", err)
+       const res = adminApprove(student.server_id, adminRole)
+       if (res.success) {
+         setApproved(prev => [...prev, student.id])
+         showToast(`${student.name} approved — forwarded to next stage`)
+         setSelected(null)
+       } else {
+         showToast(res.message, 'error')
        }
     }
-
-    setApproved(prev => [...prev, student.id])
-    setPendingCount(p => Math.max(0, p - 1))
-    setClearedCount(c => c + 1)
-    showToast(`${student.name} approved — forwarded to next stage`)
   }
 
   function handleFlag(student) {
-    showToast(`${student.name} flagged — add a comment to notify`)
+    setFlagModal({ student, reason: '' })
+  }
+
+  function confirmFlag() {
+    if (!flagModal?.reason) { showToast('Please enter a reason', 'error'); return }
+    const { student, reason } = flagModal
+    if (student.server_id) {
+       adminReject(student.server_id, adminRole, reason)
+    }
+    showToast(`${student.name} flagged with comment.`)
+    setFlagModal(null)
+    setSelected(null)
+  }
+
+  function handleCsvUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCsvLoading(true)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target.result
+      const count = processDuesCSV(text, adminRole)
+      showToast(`Successfully processed ${count} dues from CSV for ${adminRole}`)
+      setCsvLoading(false)
+    }
+    reader.readAsText(file)
   }
 
   return (
@@ -242,8 +278,16 @@ export default function AdminDashboard() {
       <div className="adm-topbar">
         <div className="adm-logo" onClick={() => navigate('/')}>NEXUS</div>
         <div className="adm-info">
-          <span className="adm-chip">HOD · Dept. of CS</span>
-          <div className="adm-avatar">AD</div>
+          {unreadNotifs > 0 && (
+            <div 
+              style={{ background: 'var(--amber)', color: '#fff', borderRadius: 100, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}
+              onClick={() => { adminMarkNotificationsRead(adminRole); showToast('Notifications marked as read') }}
+            >
+              {unreadNotifs} New Alerts
+            </div>
+          )}
+          <span className="adm-chip">{displayRole}</span>
+          <div className="adm-avatar">{adminRole.slice(0,2).toUpperCase()}</div>
         </div>
       </div>
 
@@ -251,8 +295,8 @@ export default function AdminDashboard() {
       <div className="adm-metrics">
         <div className="adm-metric">
           <div className="adm-metric-tag">Total Applications</div>
-          <div className="adm-metric-val green">124</div>
-          <div className="adm-metric-sub">Batch 2024–25</div>
+          <div className="adm-metric-val green">{studentsList.length}</div>
+          <div className="adm-metric-sub">Batch 2025–26</div>
         </div>
         <div className="adm-metric">
           <div className="adm-metric-tag">Pending Review</div>
@@ -266,7 +310,7 @@ export default function AdminDashboard() {
         </div>
         <div className="adm-metric">
           <div className="adm-metric-tag">Flagged / Dues</div>
-          <div className="adm-metric-val red">17</div>
+          <div className="adm-metric-val red">{studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'rejected').length}</div>
           <div className="adm-metric-sub">Action required</div>
         </div>
       </div>
@@ -288,7 +332,8 @@ export default function AdminDashboard() {
             </div>
             {activeTab === 'pending' && (
               <div>
-                {studentsList.map(s => (
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'pending').length === 0 && <div className="adm-doc-meta" style={{padding: '1rem'}}>No pending applications</div>}
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'pending').map(s => (
                   <div key={s.id} className={`adm-app-row ${approved.includes(s.id) ? 'faded' : ''}`} onClick={() => setSelected(s)}>
                     <div className={`adm-av ${s.avClass}`}>{s.initials}</div>
                     <div className="adm-app-info">
@@ -311,18 +356,16 @@ export default function AdminDashboard() {
 
             {activeTab === 'flagged' && (
               <div>
-                {[
-                  { initials:'NP', avClass:'adm-av-a', name:'Neha Patel',  roll:'2021CS031', issue:'Library dues pending — ₹340', badge:'Dues Unpaid' },
-                  { initials:'SK', avClass:'adm-av-g', name:'Sahil Khan',  roll:'2021CS066', issue:'Lab manual not uploaded',      badge:'Doc Missing' },
-                ].map(s => (
-                  <div key={s.roll} className="adm-app-row">
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'rejected').length === 0 && <div className="adm-doc-meta" style={{padding: '1rem'}}>No flagged applications</div>}
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'rejected').map(s => (
+                  <div key={s.id} className="adm-app-row" onClick={() => setSelected(s)}>
                     <div className={`adm-av ${s.avClass}`}>{s.initials}</div>
                     <div className="adm-app-info">
                       <div className="adm-app-name">{s.name} <span>— {s.roll}</span></div>
-                      <div className="adm-app-meta warn">{s.issue}</div>
+                      <div className="adm-app-meta warn">Action required</div>
                     </div>
-                    <span className="adm-badge red">{s.badge}</span>
-                    <button className="adm-btn-sm adm-btn-flg" onClick={() => showToast(`Reminder sent to ${s.name}`)}>Resolve</button>
+                    <span className="adm-badge red">Flagged</span>
+                    <button className="adm-btn-sm adm-btn-app" onClick={e => { e.stopPropagation(); handleApprove(s) }}>Resolve & Approve</button>
                   </div>
                 ))}
               </div>
@@ -330,15 +373,13 @@ export default function AdminDashboard() {
 
             {activeTab === 'cleared' && (
               <div>
-                {[
-                  { initials:'MS', name:'Megha Singh',  roll:'2021CS044', date:'Apr 14, 2025' },
-                  { initials:'VR', name:'Varun Reddy',  roll:'2021CS072', date:'Apr 12, 2025' },
-                ].map(s => (
-                  <div key={s.roll} className="adm-app-row">
-                    <div className="adm-av adm-av-g">{s.initials}</div>
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'approved').length === 0 && <div className="adm-doc-meta" style={{padding: '1rem'}}>No cleared applications</div>}
+                {studentsList.filter(s => s.clearanceStatus?.[adminRole] === 'approved').map(s => (
+                  <div key={s.id} className="adm-app-row" onClick={() => setSelected(s)}>
+                    <div className={`adm-av ${s.avClass}`}>{s.initials}</div>
                     <div className="adm-app-info">
                       <div className="adm-app-name">{s.name} <span>— {s.roll}</span></div>
-                      <div className="adm-app-meta">Certificate issued {s.date}</div>
+                      <div className="adm-app-meta">Cleared</div>
                     </div>
                     <div className="adm-stages">
                       {['L','H','P'].map(l => <div key={l} className="adm-st done">{l}</div>)}
@@ -353,31 +394,37 @@ export default function AdminDashboard() {
           {/* DETAIL PANEL */}
           <div className="adm-card accent">
             <div className="adm-detail-head">
-              <div className={`adm-av ${selected.avClass}`} style={{ width: 42, height: 42, fontSize: '0.75rem' }}>{selected.initials}</div>
-              <div>
-                <div className="adm-detail-name">{selected.name}</div>
-                <div className="adm-detail-sub">{selected.roll} — B.Tech CS — Batch 2025</div>
-              </div>
-              <div className="adm-detail-status">Awaiting HOD</div>
+              {selected && (
+                <>
+                  <div className={`adm-av ${selected.avClass}`} style={{ width: 42, height: 42, fontSize: '0.75rem' }}>{selected.initials}</div>
+                  <div>
+                    <div className="adm-detail-name">{selected.name}</div>
+                    <div className="adm-detail-sub">{selected.roll}</div>
+                  </div>
+                  <div className="adm-detail-status">{selected.clearanceStatus?.[adminRole] || 'Pending'}</div>
+                </>
+              )}
             </div>
             <div className="adm-card-label">Uploaded Documents</div>
-            {DOCS.map(doc => (
-              <div key={doc.name} className="adm-doc-row">
+            {selected && selected.documents && selected.documents.length > 0 ? selected.documents.map(doc => (
+              <div key={doc.docId} className="adm-doc-row">
                 <div>
                   <div className="adm-doc-name">{doc.name}</div>
-                  <div className="adm-doc-meta">{doc.meta}</div>
+                  <div className="adm-doc-meta">{doc.type} · {doc.size}</div>
                 </div>
-                <button className="adm-btn-view" onClick={() => showToast(`Opening ${doc.name}`)}>View</button>
+                <button className="adm-btn-view" onClick={() => setViewingDocs({ studentId: selected.server_id, studentName: selected.name })}>View</button>
               </div>
-            ))}
-            <div className="adm-action-row">
-              <button className="adm-btn-md adm-btn-solid" onClick={() => handleApprove(selected)}>
-                Approve &amp; Forward to Principal →
-              </button>
-              <button className="adm-btn-md adm-btn-outline-red" onClick={() => showToast('Application flagged — add a comment')}>
-                Flag with Comment
-              </button>
-            </div>
+            )) : <div className="adm-doc-meta" style={{marginBottom: '1rem'}}>No documents uploaded yet</div>}
+            {selected && (
+              <div className="adm-action-row">
+                <button className="adm-btn-md adm-btn-solid" onClick={() => handleApprove(selected)}>
+                  Approve &amp; Forward to Principal →
+                </button>
+                <button className="adm-btn-md adm-btn-outline-red" onClick={() => handleFlag(selected)}>
+                  Flag with Comment
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -385,56 +432,97 @@ export default function AdminDashboard() {
         <div className="adm-right">
 
           {/* HEATMAP */}
-          <div className="adm-card">
-            <div className="adm-card-label">
-              Live Heatmap · <span style={{ color: 'var(--green)' }}>{selected.name}</span>
+          {adminRole !== 'HOD' && adminRole !== 'Principal' && (
+            <div className="adm-card">
+              <div className="adm-card-label">
+                Live Heatmap {selected && <>· <span style={{ color: 'var(--green)' }}>{selected.name}</span></>}
+              </div>
+              <div className="adm-heatmap">
+                {HEATMAP.map(h => {
+                  const s = selected?.clearanceStatus?.[h.dept] || 'pending'
+                  const statusStr = s === 'approved' ? 'g' : s === 'rejected' ? 'r' : 'n'
+                  const labelStr = s === 'approved' ? 'Cleared ✓' : s === 'rejected' ? 'Rejected ✗' : 'Waiting'
+                  return (
+                    <div key={h.dept} className={`adm-hm ${statusStr}`}>
+                      <div className="adm-hm-dept">{h.dept}</div>
+                      <div className="adm-hm-stat">{labelStr}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-            <div className="adm-heatmap">
-              {HEATMAP.map(h => (
-                <div key={h.dept} className={`adm-hm ${h.status}`}>
-                  <div className="adm-hm-dept">{h.dept}</div>
-                  <div className="adm-hm-stat">{h.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* DUES */}
           <div className="adm-card">
-            <div className="adm-card-label">Dues Reconciliation</div>
-            {DUES.map(d => (
-              <div key={d.name} className="adm-dues-row">
+            <div className="adm-card-label">Dues Reconciliation — {selected?.name || 'Student'}</div>
+            {selected && selected.dues && selected.dues.length > 0 ? selected.dues.map(d => (
+              <div key={d.id} className="adm-dues-row">
                 <div>
-                  <div className="adm-dues-name">{d.name}</div>
-                  <div className="adm-dues-amt">{d.amt}</div>
+                  <div className="adm-dues-name">{d.item}</div>
+                  <div className="adm-dues-amt">{d.dept} · ₹{d.amount}</div>
                 </div>
-                <span className={`adm-badge ${d.status}`}>{d.label}</span>
+                <span className={`adm-badge ${d.paid ? 'green' : 'red'}`}>{d.paid ? 'Paid ✓' : 'Unpaid ✗'}</span>
               </div>
-            ))}
-            <button className="adm-csv-btn" onClick={() => showToast('CSV upload triggered — import dues list')}>
-              + Upload Dues CSV
-            </button>
+            )) : <div className="adm-doc-meta" style={{padding: '0.5rem 0'}}>No dues found</div>}
+            <input 
+              id="csv-upload" 
+              type="file" 
+              accept=".csv" 
+              style={{ display: 'none' }} 
+              onChange={handleCsvUpload} 
+            />
+            {adminRole !== 'Principal' && (
+              <button 
+                className="adm-csv-btn" 
+                onClick={() => document.getElementById('csv-upload').click()}
+                disabled={csvLoading}
+              >
+                {csvLoading ? '⌛ Processing...' : '+ Upload Dues CSV'}
+              </button>
+            )}
           </div>
 
           {/* NUDGES */}
           <div className="adm-card">
-            <div className="adm-card-label">Email Nudges — Stale</div>
-            {[
-              { name: "Principal's Office", days: '3 days idle' },
-              { name: 'Accounts Dept.',     days: '2 days idle' },
-            ].map(n => (
-              <div key={n.name} className="adm-nudge-row">
-                <div className="adm-nudge-name">{n.name}</div>
-                <div className="adm-nudge-days">{n.days}</div>
-                <button className="adm-btn-nudge" onClick={() => showToast(`Reminder sent to ${n.name}`)}>Nudge</button>
+            <div className="adm-card-label">Role-Based Notifications</div>
+            {notifications.length > 0 ? notifications.slice(0, 5).map(n => (
+              <div key={n.id} className="adm-nudge-row" style={{ opacity: n.read ? 0.6 : 1 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: n.read ? 'var(--border2)' : 'var(--amber)', flexShrink: 0 }} />
+                <div className="adm-nudge-name" style={{ fontSize: '0.75rem', fontWeight: n.read ? 400 : 600 }}>{n.msg}</div>
+                <div className="adm-nudge-days" style={{ fontSize: '0.6rem' }}>{n.time}</div>
               </div>
-            ))}
+            )) : <div className="adm-doc-meta" style={{padding: '0.5rem 0'}}>No recent alerts</div>}
           </div>
         </div>
       </div>
 
-      {/* TOAST */}
+      {/* TOAST & MODALS */}
       <div className={`adm-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+      
+      {/* FLAG REASON MODAL */}
+      {flagModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: '2rem', borderRadius: '18px', width: '400px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 1rem', fontFamily: 'var(--serif)' }}>Flag Application</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginBottom: '1rem' }}>
+              Explain why you are flagging <strong>{flagModal.student.name}</strong>'s clearance:
+            </p>
+            <textarea 
+              style={{ width: '100%', height: '100px', borderRadius: '10px', border: '1px solid var(--border)', padding: '0.75rem', fontFamily: 'inherit', fontSize: '0.9rem', outline: 'none', marginBottom: '1.25rem' }}
+              placeholder="e.g. Missing library book: 'Advanced Calculus', Page 42 torn..."
+              value={flagModal.reason}
+              onChange={e => setFlagModal({...flagModal, reason: e.target.value})}
+            />
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button className="adm-btn-md" style={{ flex: 1, borderColor: 'var(--border)', color: 'var(--text2)' }} onClick={() => setFlagModal(null)}>Cancel</button>
+              <button className="adm-btn-md adm-btn-solid" style={{ flex: 1, background: 'var(--red)', borderColor: 'var(--red)' }} onClick={confirmFlag}>Submit Flag</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingDocs && <DocumentViewer role={adminRole} studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
     </div>
   )
 }

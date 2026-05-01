@@ -1,38 +1,17 @@
+<<<<<<< HEAD
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+=======
+import { useState, useEffect } from 'react'
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
-import ClearanceHeatmap from '../../components/ClearanceHeatmap'
-import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
 import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import { fetchRegisteredStudents } from '../../utils/adminApi'
 import '../../styles/admin.css'
-
-const STUDENTS = [
-    {
-        id: 's1', initials: 'TP', avatarClass: 'green-bg', name: 'Tanaya Patel', roll: '2021CS001',
-        booksIssued: 0, fine: 0, status: 'pending', statusColor: 'amber', statusLabel: 'Pending',
-        heatmap: { Library: 'pending', Lab: 'approved', Accounts: 'approved', Hostel: 'approved', HOD: 'pending', Principal: 'locked' }
-    },
-    {
-        id: 's2', initials: 'HS', avatarClass: 'blue-bg', name: 'Hritani Sharma', roll: '2021CS042',
-        booksIssued: 2, fine: 340, status: 'pending', statusColor: 'red', statusLabel: 'Fine Due',
-        heatmap: { Library: 'pending', Lab: 'approved', Accounts: 'pending', Hostel: 'approved', HOD: 'locked', Principal: 'locked' }
-    },
-    {
-        id: 's3', initials: 'RK', avatarClass: 'amber-bg', name: 'Rohit Kumar', roll: '2021CS017',
-        booksIssued: 0, fine: 0, status: 'pending', statusColor: 'amber', statusLabel: 'Pending',
-        heatmap: { Library: 'pending', Lab: 'approved', Accounts: 'approved', Hostel: 'locked', HOD: 'locked', Principal: 'locked' }
-    },
-    {
-        id: 's4', initials: 'NP', avatarClass: 'purple-bg', name: 'Neha Patel', roll: '2021CS031',
-        booksIssued: 1, fine: 120, status: 'pending', statusColor: 'red', statusLabel: 'Fine Due',
-        heatmap: { Library: 'pending', Lab: 'approved', Accounts: 'approved', Hostel: 'approved', HOD: 'locked', Principal: 'locked' }
-    },
-]
 
 const COLUMNS = [
     { key: 'student', label: 'Student' },
@@ -42,10 +21,10 @@ const COLUMNS = [
 ]
 
 export default function LibraryDashboard() {
-    const navigate = useNavigate()
     const [activeItem, setActiveItem] = useState('dashboard')
     const [approvedIds, setApprovedIds] = useState([])
     const [rejectedIds, setRejectedIds] = useState([])
+<<<<<<< HEAD
     const [toast, setToast] = useState({ msg: '', show: false })
     const [pendingCount, setPendingCount] = useState(STUDENTS.length)
     const [selectedStudent, setSelectedStudent] = useState(STUDENTS[0])
@@ -109,22 +88,34 @@ export default function LibraryDashboard() {
         reader.readAsText(file)
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
+=======
+    const [selectedStudent, setSelectedStudent] = useState(null)
+    const [toast, setToast] = useState({ msg: '', show: false })
+    const [storeSubmissions, setStoreSubmissions] = useState([])
+    const [viewingDocs, setViewingDocs] = useState(null)
+    const [flagModal, setFlagModal] = useState(null)
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
-    // Load student submissions from shared store
     useEffect(() => {
-        function loadSubmissions() {
+        function loadSubmissions() { 
             const subs = getSubmissionsForAdmin('Library')
             setStoreSubmissions(subs)
+            if (!selectedStudent && subs.length > 0) setSelectedStudent({
+                id: `store_${subs[0].studentId}`, studentId: subs[0].studentId, initials: subs[0].initials, avatarClass: subs[0].avatarClass || 'blue-bg',
+                name: subs[0].studentName, roll: subs[0].studentId, 
+                booksIssued: subs[0].documents.filter(d => d.targetDept === 'Library').length,
+                fine: (subs[0].dues || []).filter(d => d.dept === 'Library' && !d.paid).reduce((s,d)=>s+d.amount, 0),
+                status: subs[0].statusForRole, statusLabel: subs[0].statusForRole === 'approved' ? 'Cleared' : 'Pending',
+                documents: subs[0].documents, fromStore: true,
+            })
         }
         loadSubmissions()
         return onStoreUpdate(loadSubmissions)
     }, [])
 
-    function showToast(msg) {
-        setToast({ msg, show: true })
-        setTimeout(() => setToast(t => ({ ...t, show: false })), 2800)
-    }
+    function showToast(msg) { setToast({ msg, show: true }); setTimeout(() => setToast(t => ({ ...t, show: false })), 2800) }
 
+<<<<<<< HEAD
     function handleApprove(student) {
         if (approvedIds.includes(student.id)) return
         if (student.fine > 0) { showToast(`⚠️ Cannot approve — ${student.name} has ₹${student.fine} fine pending`); return }
@@ -161,23 +152,46 @@ export default function LibraryDashboard() {
     // Merge hardcoded students with store submissions + API students
     const storeStudents = storeSubmissions
         .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+=======
+    function handleApprove(s) {
+        if (approvedIds.includes(s.id)) return
+        if (s.studentId) {
+            const res = adminApprove(s.studentId, 'Library', 'Library clearance approved. All books returned.')
+            if (res.success) {
+                setApprovedIds(p => [...p, s.id])
+                showToast(`✓ Library clearance approved for ${s.name}`)
+            } else {
+                showToast(res.message)
+            }
+        }
+    }
+    function handleReject(s) {
+        setFlagModal({ student: s, reason: '' })
+    }
+    function confirmReject() {
+        if (!flagModal?.reason) { showToast('Please enter a reason'); return }
+        const s = flagModal.student
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Library', flagModal.reason)
+        showToast(`✗ Library clearance rejected for ${s.name}`)
+        setFlagModal(null)
+    }
+
+    const tableData = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending' || s.statusForRole === 'approved' || s.statusForRole === 'rejected')
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
         .map(s => ({
-            id: `store_${s.studentId}`,
-            studentId: s.studentId,
-            initials: s.initials,
-            avatarClass: s.avatarClass || 'blue-bg',
-            name: s.studentName,
-            roll: s.studentId,
-            booksIssued: s.relevantDocs.length,
-            fine: 0,
-            status: s.statusForRole,
-            statusColor: s.statusForRole === 'approved' ? 'green' : s.statusForRole === 'rejected' ? 'red' : 'amber',
-            statusLabel: s.statusForRole === 'approved' ? 'Cleared' : s.statusForRole === 'rejected' ? 'Rejected' : 'Pending',
-            heatmap: s.clearanceStatus,
-            documents: s.relevantDocs,
-            fromStore: true,
+            id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
+            name: s.studentName, roll: s.studentId, 
+            booksIssued: s.documents.filter(d => d.targetDept === 'Library').length,
+            fine: (s.dues || []).filter(d => d.dept === 'Library' && !d.paid).reduce((sum,d)=>sum+d.amount, 0),
+            status: approvedIds.includes(`store_${s.studentId}`) ? 'approved' : rejectedIds.includes(`store_${s.studentId}`) ? 'rejected' : s.statusForRole,
+            statusColor: approvedIds.includes(`store_${s.studentId}`) ? 'green' : rejectedIds.includes(`store_${s.studentId}`) ? 'red' : (s.statusForRole === 'approved' ? 'green' : 'amber'),
+            statusLabel: approvedIds.includes(`store_${s.studentId}`) ? 'Cleared' : rejectedIds.includes(`store_${s.studentId}`) ? 'Rejected' : (s.statusForRole === 'approved' ? 'Cleared' : 'Pending'),
+            documents: s.relevantDocs, fromStore: true,
         }))
 
+<<<<<<< HEAD
     const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
     const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !STUDENTS.some(s => s.roll === a.roll))]
 
@@ -205,27 +219,18 @@ export default function LibraryDashboard() {
         }
     })
 
+=======
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
     return (
         <div className="admin-layout">
-            <AdminSidebar
-                role="library"
-                activeItem={activeItem}
-                onNavigate={setActiveItem}
-                badges={{ pending: pendingCount, notifs: 2 }}
-            />
+            <AdminSidebar role="library" activeItem={activeItem} onNavigate={setActiveItem} badges={{ pending: tableData.filter(x=>x.status==='pending').length, notifs: 2 }} />
             <main className="admin-content">
                 <div className="admin-header">
-                    <div className="admin-header-left">
-                        <h1>Library Dashboard</h1>
-                        <p>Manage book returns, fines, and library clearances</p>
-                    </div>
-                    <div className="admin-header-actions">
-                        <button className="btn btn-outline" onClick={() => showToast('CSV export triggered')}>
-                            ↓ Export CSV
-                        </button>
-                    </div>
+                    <div className="admin-header-left"><h1>Library Dashboard</h1><p>Manage book returns, fines, and library clearances</p></div>
+                    <div className="admin-header-actions"><button className="btn btn-outline" onClick={() => showToast('Report exported')}>↓ Export</button></div>
                 </div>
 
+<<<<<<< HEAD
                 {activeItem === 'students' && (
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
@@ -236,17 +241,18 @@ export default function LibraryDashboard() {
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
                 )}
 
+=======
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
                 {(activeItem === 'dashboard' || activeItem === 'clearances') && (
                     <>
-                        {/* Stats */}
                         {activeItem === 'dashboard' && (
                             <div className="stats-grid">
-                                <StatsCard label="Pending Clearances" value={pendingCount} subtitle="Awaiting your action" color="amber" />
-                                <StatsCard label="Books Pending Return" value="3" subtitle="Across all students" color="red" />
+                                <StatsCard label="Pending Clearances" value={tableData.filter(x=>x.status==='pending').length} subtitle="Awaiting action" color="amber" />
                                 <StatsCard label="Library Fines Pending" value="₹460" subtitle="Uncollected" color="red" />
                                 <StatsCard label="Fines Collected" value="₹2,140" subtitle="This batch" color="green" />
                             </div>
                         )}
+<<<<<<< HEAD
 
                         {/* Internal Dues Reconciliation Engine */}
                         <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'flex-end' }}>
@@ -257,88 +263,56 @@ export default function LibraryDashboard() {
                         </div>
 
                         {/* Main Content */}
+=======
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
                         <div className="content-left">
-                                <ClearanceTable
-                                    columns={COLUMNS}
-                                    data={tableData}
-                                    approvedIds={approvedIds}
-                                    onApprove={handleApprove}
-                                    onReject={handleReject}
-                                    onRowClick={setSelectedStudent}
+                                <ClearanceTable columns={COLUMNS} data={tableData} approvedIds={approvedIds} onApprove={handleApprove} onReject={handleReject} onRowClick={setSelectedStudent}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Viewing books for ${row.name}`) }}>
-                                                {row.fromStore ? '📄 View Docs' : 'View Books'}
-                                            </button>
-                                            {row.fine === 0
-                                                ? <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
-                                                : <button className="btn btn-sm btn-amber" onClick={e => { e.stopPropagation(); showToast(`Add fine collected for ${row.name}`) }}>+ Collect Fine</button>
-                                            }
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); setViewingDocs({ studentId: row.studentId, studentName: row.name }) }}>📄 Docs</button>
+                                            <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}
                                 />
-
-                                {/* Detail Panel */}
-                                <div className="detail-card">
-                                    <div className="detail-header">
-                                        <div className={`student-avatar ${selectedStudent.avatarClass}`} style={{ width: 44, height: 44 }}>
-                                            {selectedStudent.initials}
+                                {selectedStudent && (
+                                    <div className="detail-card">
+                                        <div className="detail-header">
+                                            <div className={`student-avatar ${selectedStudent.avatarClass}`} style={{ width: 44, height: 44 }}>{selectedStudent.initials}</div>
+                                            <div><div className="detail-name">{selectedStudent.name}</div><div className="detail-sub">{selectedStudent.roll} — B.Tech CS — Batch 2025</div></div>
+                                            <div className={`detail-status ${selectedStudent.status === 'approved' ? 'approved' : 'pending'}`}>{selectedStudent.statusLabel}</div>
                                         </div>
-                                        <div>
-                                            <div className="detail-name">{selectedStudent.name}</div>
-                                            <div className="detail-sub">{selectedStudent.roll} — B.Tech CS — Batch 2025</div>
+                                        <div className="detail-section-label">Library Details</div>
+                                        <div className="detail-info-grid">
+                                            <div className="detail-info-item"><div className="detail-info-label">Books Issued</div><div className="detail-info-value">{selectedStudent.booksIssued} book(s)</div></div>
+                                            <div className="detail-info-item"><div className="detail-info-label">Outstanding Fine</div><div className="detail-info-value" style={{ color: selectedStudent.fine > 0 ? 'var(--red)' : 'var(--green)' }}>₹{selectedStudent.fine}</div></div>
                                         </div>
-                                        <div className={`detail-status ${selectedStudent.fine > 0 ? 'rejected' : 'pending'}`}>
-                                            {selectedStudent.fine > 0 ? 'Fine Pending' : 'Awaiting Clearance'}
-                                        </div>
-                                    </div>
-                                    <div className="detail-section-label">Library Details</div>
-                                    <div className="detail-info-grid">
-                                        <div className="detail-info-item">
-                                            <div className="detail-info-label">Books Issued</div>
-                                            <div className="detail-info-value">{selectedStudent.booksIssued} book(s)</div>
-                                        </div>
-                                        <div className="detail-info-item">
-                                            <div className="detail-info-label">Outstanding Fine</div>
-                                            <div className="detail-info-value" style={{ color: selectedStudent.fine > 0 ? 'var(--red)' : 'var(--green)' }}>
-                                                ₹{selectedStudent.fine}
-                                            </div>
-                                        </div>
-                                        <div className="detail-info-item">
-                                            <div className="detail-info-label">Last Visit</div>
-                                            <div className="detail-info-value">Apr 12, 2025</div>
-                                        </div>
-                                        <div className="detail-info-item">
-                                            <div className="detail-info-label">Books Returned</div>
-                                            <div className="detail-info-value" style={{ color: selectedStudent.booksIssued === 0 ? 'var(--green)' : 'var(--red)' }}>
-                                                {selectedStudent.booksIssued === 0 ? 'All Returned ✓' : `${selectedStudent.booksIssued} pending`}
-                                            </div>
+                                        <div className="detail-actions">
+                                            <button className="btn btn-solid" onClick={() => handleApprove(selectedStudent)}>✓ Approve Library Clearance →</button>
+                                            <button className="btn btn-reject" onClick={() => handleReject(selectedStudent)}>✗ Reject</button>
                                         </div>
                                     </div>
-                                    <div className="detail-actions">
-                                        <button className="btn btn-solid" onClick={() => handleApprove(selectedStudent)}>
-                                            ✓ Approve Library Clearance →
-                                        </button>
-                                        <button className="btn btn-reject" onClick={() => handleReject(selectedStudent)}>
-                                            ✗ Reject
-                                        </button>
-                                    </div>
-                                </div>
+                                )}
                         </div>
                     </>
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
-            {viewingDocs && (
-                <DocumentViewer
-                    role="Library"
-                    studentId={viewingDocs.studentId}
-                    studentName={viewingDocs.studentName}
-                    onClose={() => setViewingDocs(null)}
-                />
+            {flagModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#fff', padding: '2rem', borderRadius: '18px', width: '400px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+                        <h3 style={{ margin: '0 0 1rem' }}>Flag Application</h3>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginBottom: '1rem' }}>Explain why you are flagging <strong>{flagModal.student.name}</strong>:</p>
+                        <textarea style={{ width: '100%', height: '100px', borderRadius: '10px', border: '1px solid var(--border)', padding: '0.75rem', fontFamily: 'inherit', fontSize: '0.9rem', outline: 'none', marginBottom: '1.25rem' }} placeholder="Reason..." value={flagModal.reason} onChange={e => setFlagModal({...flagModal, reason: e.target.value})} />
+                        <div style={{ display: 'flex', gap: '0.75rem' }}><button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setFlagModal(null)}>Cancel</button><button className="btn btn-solid" style={{ flex: 1, background: 'var(--red)', border: 'none' }} onClick={confirmReject}>Submit Flag</button></div>
+                    </div>
+                </div>
             )}
+<<<<<<< HEAD
             <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Library Clearance" />
+=======
+            {viewingDocs && <DocumentViewer role="Library" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
         </div>
     )
 }

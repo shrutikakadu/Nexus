@@ -1,42 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { studentUploadDocument, getStudentStatus, onStoreUpdate } from '../../utils/clearanceStore'
+import { studentUploadDocument, getStudentStatus, onStoreUpdate, initStudentSubmission, studentPayDue } from '../../utils/clearanceStore'
 
-// Load student data from localStorage (saved during login or profile setup)
-function getStudentData() {
-  try {
-    const profile = JSON.parse(localStorage.getItem('nexus_profile') || '{}')
-    const email = localStorage.getItem('nexus_email') || ''
-    const roll = localStorage.getItem('nexus_roll') || profile.roll || ''
-    return {
-      name: profile.name || 'Student',
-      roll: roll,
-      email: email,
-      dept: profile.dept || 'Computer Science',
-      batch: profile.batch || '2025',
-      semester: profile.semester || '8',
-      cgpa: profile.cgpa || '8.7',
-      hostel: profile.hostel || 'Day Scholar',
-      phone: profile.phone || '',
-      dob: profile.dob || '',
-      gender: profile.gender || '',
-      college: profile.college || 'Nexus Institute of Technology',
-      clearanceId: profile.clearance_id || `NX-${profile.batch || '2025'}-${(roll || '000').slice(-3)}`,
-      photo: (profile.name || 'S').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST',
-      advisor: profile.advisor || '',
-    }
-  } catch {
-    return {
-      name: 'Student', roll: '', email: '', dept: 'Computer Science',
-      batch: '2025', semester: '8', cgpa: '8.7', hostel: 'Day Scholar',
-      phone: '', dob: '', gender: '', college: 'Nexus Institute of Technology',
-      clearanceId: 'NX-2025-000', photo: 'ST', advisor: '',
-    }
-  }
-}
-
-
-// CORRECT SEQUENCE as requested — ALL start as pending for new students
 const INITIAL_PIPELINE = [
   { id: 1, dept: 'Library', icon: '📚', status: 'pending', comment: '' },
   { id: 2, dept: 'Lab', icon: '🔬', status: 'pending', comment: '' },
@@ -46,7 +11,6 @@ const INITIAL_PIPELINE = [
   { id: 6, dept: 'Principal', icon: '🏛️', status: 'pending', comment: '' },
 ]
 
-// ALL documents start as missing — student must upload them
 const INITIAL_DOCS = [
   { id: 1, name: 'College ID Card', icon: '🪪', status: 'missing', size: '', type: '', date: '', targetDept: 'Library' },
   { id: 2, name: 'Library Receipt', icon: '📚', status: 'missing', size: '', type: '', date: '', targetDept: 'Library' },
@@ -56,28 +20,17 @@ const INITIAL_DOCS = [
   { id: 6, name: 'Sports No-Dues', icon: '⚽', status: 'missing', size: '', type: '', date: '', targetDept: 'HOD' },
 ]
 
-// Start with a welcome notification only
-const INITIAL_NOTIFS = [
-  { id: 1, msg: 'Welcome to Nexus! Your clearance application has been created.', time: 'Just now', read: false, type: 'info' },
-]
+const INITIAL_NOTIFS = []
 
-// Default dues and fines for every new student
-const DUES = [
-  { id: 1, dept: 'Accounts', item: 'Tuition Fee (Sem 8)', amount: 4500, paid: false },
-  { id: 2, dept: 'Library', item: 'Late Return Fine', amount: 150, paid: false },
-  { id: 3, dept: 'Hostel', item: 'Hostel Mess Dues', amount: 650, paid: false },
-  { id: 4, dept: 'Accounts', item: 'Exam Fee', amount: 1200, paid: false },
-  { id: 5, dept: 'Lab', item: 'Lab Equipment Deposit Refund', amount: 500, paid: false },
-]
+const DUES = []
 
 const CERTIFICATES = [
-  { id: 1, name: 'No Dues Certificate', dept: 'All Departments', status: 'pending', desc: 'Issued after all departments approve.', type: 'nodues', requiresAllClear: true },
-  { id: 2, name: 'Bonafide Certificate', dept: 'Academic Office', status: 'ready', desc: 'Confirms enrollment status.', type: 'bonafide', requiresAllClear: false },
-  { id: 3, name: 'Course Completion', dept: 'Academic Office', status: 'ready', desc: 'Confirms completion of B.Tech program.', type: 'completion', requiresAllClear: false },
-  { id: 4, name: 'Provisional Degree', dept: 'Principal Office', status: 'pending', desc: 'Issued after full clearance.', type: 'degree', requiresAllClear: true },
+  { id: 1, name: 'No Dues Certificate', dept: 'All Departments', status: 'pending', desc: 'Issued after all departments approve.', type: 'nodues' },
+  { id: 2, name: 'Bonafide Certificate', dept: 'Academic Office', status: 'ready', desc: 'Confirms enrollment status.', type: 'bonafide' },
+  { id: 5, name: 'Course Completion', dept: 'Academic Office', status: 'ready', desc: 'Confirms completion of B.Tech program.', type: 'completion' },
+  { id: 6, name: 'Provisional Degree', dept: 'Principal Office', status: 'pending', desc: 'Issued after full clearance.', type: 'degree' },
 ]
 
-// Personal documents for Digital Locker
 const LOCKER_DOCS = [
   { id: 'ld1', name: 'Aadhaar Card', icon: '🪪', category: 'Identity', file: null, preview: null },
   { id: 'ld2', name: '10th Marksheet', icon: '📄', category: 'Academic', file: null, preview: null },
@@ -100,305 +53,47 @@ const TABS = [
   { id: 'locker', label: 'Digital Locker', icon: '◫' },
 ]
 
-// ── Certificate PDF generator ──────────────────────────────────────────────
 function generateCertificatePDF(cert, student) {
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
   const certNo = `${student.college.substring(0, 3).toUpperCase()}-${cert.type.toUpperCase()}-${student.roll}-${now.getFullYear()}`
-
   const templates = {
-    bonafide: `
-      <p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, 
-      son/daughter of ____________, bearing Roll No. <strong>${student.roll}</strong>, 
-      is a <em>bonafide</em> student of <strong>${student.dept}</strong> in the 
-      <strong>${student.batch}</strong> batch at <strong>${student.college}</strong>.</p>
-      <p style="margin:0 0 18px">She/He is currently enrolled in Semester ${student.semester} 
-      of the B.Tech programme and has maintained a CGPA of <strong>${student.cgpa}</strong>.</p>
-      <p style="margin:0">This certificate is issued for the purpose of ____________ 
-      and is valid for a period of six months from the date of issue.</p>`,
-    completion: `
-      <p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, 
-      bearing Roll No. <strong>${student.roll}</strong>, has successfully completed 
-      all the requirements for the degree of <strong>Bachelor of Technology</strong> in 
-      <strong>${student.dept}</strong> from <strong>${student.college}</strong>.</p>
-      <p style="margin:0 0 18px">She/He has completed the programme with a CGPA of 
-      <strong>${student.cgpa}</strong> during the academic year <strong>2021–${student.batch}</strong>.</p>
-      <p style="margin:0">This certificate is issued in good faith and is subject to 
-      ratification by the University.</p>`,
-    nodues: `
-      <p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, 
-      Roll No. <strong>${student.roll}</strong>, Department of <strong>${student.dept}</strong>, 
-      Batch <strong>${student.batch}</strong>, has cleared all dues from all departments 
-      of <strong>${student.college}</strong>.</p>
-      <p style="margin:0">All library books have been returned, laboratory dues cleared, 
-      hostel dues settled, and all financial obligations have been fulfilled. 
-      There are no outstanding dues against this student.</p>`,
-    character: `
-      <p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, 
-      Roll No. <strong>${student.roll}</strong>, was a student of this institution during 
-      the period <strong>2021–${student.batch}</strong>.</p>
-      <p style="margin:0 0 18px">During her/his tenure at <strong>${student.college}</strong>, 
-      she/he has displayed exemplary conduct and maintained good moral character.</p>
-      <p style="margin:0">To the best of our knowledge, no disciplinary action has been 
-      taken against her/him. This certificate is issued on the basis of records available.</p>`,
-    migration: `
-      <p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, 
-      bearing Roll No. <strong>${student.roll}</strong>, was enrolled in the B.Tech programme 
-      in <strong>${student.dept}</strong> at <strong>${student.college}</strong> from 
-      <strong>2021 to ${student.batch}</strong>.</p>
-      <p style="margin:0 0 18px">She/He has successfully completed the programme and 
-      is eligible for migration to pursue higher studies.</p>
-      <p style="margin:0">This Migration Certificate is issued at the request of the 
-      student for the purpose of admission to higher educational institutions.</p>`,
-    degree: `
-      <p style="margin:0 0 18px">This is to provisionally certify that 
-      <strong>${student.name}</strong>, Roll No. <strong>${student.roll}</strong>, 
-      has fulfilled all the academic requirements for the award of the degree of 
-      <strong>Bachelor of Technology</strong> in <strong>${student.dept}</strong>.</p>
-      <p style="margin:0 0 18px">This Provisional Degree Certificate is issued pending 
-      the formal convocation of <strong>${student.college}</strong>.</p>
-      <p style="margin:0">The official degree will be awarded at the convocation ceremony. 
-      This certificate is valid until the original degree is awarded.</p>`,
+    bonafide: `<p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, bearing Roll No. <strong>${student.roll}</strong>, is a <em>bonafide</em> student of <strong>${student.dept}</strong> in the <strong>${student.batch}</strong> batch at <strong>${student.college}</strong>.</p><p style="margin:0 0 18px">She/He is currently enrolled in Semester ${student.semester} of the B.Tech programme and has maintained a CGPA of <strong>${student.cgpa}</strong>.</p><p style="margin:0">This certificate is valid for six months from the date of issue.</p>`,
+    completion: `<p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, Roll No. <strong>${student.roll}</strong>, has successfully completed all requirements for the B.Tech degree in <strong>${student.dept}</strong> from <strong>${student.college}</strong> with CGPA <strong>${student.cgpa}</strong>.</p>`,
+    nodues: `<p style="margin:0 0 18px">This is to certify that <strong>${student.name}</strong>, Roll No. <strong>${student.roll}</strong>, Dept. <strong>${student.dept}</strong>, Batch <strong>${student.batch}</strong>, has cleared all dues from all departments of <strong>${student.college}</strong>.</p>`,
+    degree: `<p style="margin:0 0 18px">This is provisionally certify that <strong>${student.name}</strong>, Roll No. <strong>${student.roll}</strong>, has fulfilled all requirements for the B.Tech degree in <strong>${student.dept}</strong> from <strong>${student.college}</strong>.</p>`,
   }
-
   const body = templates[cert.type] || templates.bonafide
-  const verifyUrl = `${window.location.origin}/verify/${encodeURIComponent(certNo)}`
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verifyUrl)}`
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<title>${cert.name} - ${student.name}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'EB Garamond',Georgia,serif; background:#fff; }
-  .page { width:794px; min-height:1123px; margin:0 auto; padding:60px 70px; position:relative; border:1px solid #e0d9cc; }
-  .outer-border { position:absolute; inset:20px; border:3px double #1a7a4a; pointer-events:none; }
-  .inner-border { position:absolute; inset:26px; border:1px solid #c0dfc8; pointer-events:none; }
-  .header { text-align:center; margin-bottom:36px; }
-  .college-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:#1a7a4a; letter-spacing:1px; margin-bottom:4px; }
-  .college-addr { font-size:12px; color:#7aaa8a; margin-bottom:16px; }
-  .divider { height:2px; background:linear-gradient(90deg,transparent,#1a7a4a,transparent); margin:12px 0; }
-  .cert-title { font-family:'Playfair Display',serif; font-size:28px; font-weight:700; color:#0f2718; margin:20px 0 4px; letter-spacing:2px; }
-  .cert-subtitle { font-size:13px; color:#7aaa8a; letter-spacing:4px; text-transform:uppercase; }
-  .cert-no { font-size:11px; color:#7aaa8a; margin-top:6px; font-family:monospace; }
-  .seal-row { display:flex; align-items:center; justify-content:center; gap:16px; margin:20px 0; }
-  .seal { width:70px; height:70px; border-radius:50%; border:3px solid #1a7a4a; display:flex; align-items:center; justify-content:center; flex-direction:column; }
-  .seal-text { font-size:8px; color:#1a7a4a; font-weight:700; letter-spacing:1px; text-align:center; line-height:1.4; }
-  .body { font-size:15px; color:#1a1a1a; line-height:1.9; text-align:justify; margin:28px 0; }
-  .student-box { background:#f7fdf9; border:1px solid #d4ead9; border-radius:10px; padding:18px 24px; margin:24px 0; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .student-field label { font-size:10px; color:#7aaa8a; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:2px; }
-  .student-field span { font-size:13px; font-weight:600; color:#0f2718; }
-  .footer { margin-top:48px; display:flex; justify-content:space-between; align-items:flex-end; }
-  .sign-block { text-align:center; }
-  .sign-line { width:160px; height:1px; background:#0f2718; margin:40px auto 6px; }
-  .sign-name { font-size:13px; font-weight:600; }
-  .sign-title { font-size:11px; color:#7aaa8a; }
-  .date-block { text-align:left; }
-  .date-label { font-size:11px; color:#7aaa8a; text-transform:uppercase; letter-spacing:1px; }
-  .date-val { font-size:14px; font-weight:600; color:#0f2718; }
-  .watermark { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-family:'Playfair Display',serif; font-size:80px; color:rgba(26,122,74,0.04); font-weight:700; pointer-events:none; white-space:nowrap; }
-  .qr-box { text-align:center; margin-top:24px; padding-top:16px; border-top:1px solid #d4ead9; }
-  .qr-text { font-size:10px; color:#7aaa8a; font-family:monospace; margin-top:4px; }
-  @media print { body{-webkit-print-color-adjust:exact; print-color-adjust:exact;} }
-</style>
-</head>
-<body>
-<div class="page">
-  <div class="outer-border"></div>
-  <div class="inner-border"></div>
-  <div class="watermark">NEXUS</div>
-  <div class="header">
-    <div class="college-name">${student.college.toUpperCase()}</div>
-    <div class="college-addr">Affiliated to State Technical University · NAAC Accredited 'A' Grade</div>
-    <div class="divider"></div>
-    <div class="cert-title">${cert.name.toUpperCase()}</div>
-    <div class="cert-subtitle">Official Document</div>
-    <div class="cert-no">Certificate No: ${certNo}</div>
-  </div>
-  <div class="seal-row">
-    <div class="seal"><div class="seal-text">NEXUS<br>INSTITUTE</div></div>
-  </div>
-  <div class="student-box">
-    <div class="student-field"><label>Student Name</label><span>${student.name}</span></div>
-    <div class="student-field"><label>Roll Number</label><span>${student.roll}</span></div>
-    <div class="student-field"><label>Department</label><span>${student.dept}</span></div>
-    <div class="student-field"><label>Batch</label><span>${student.batch}</span></div>
-    <div class="student-field"><label>Semester</label><span>${student.semester}</span></div>
-    <div class="student-field"><label>CGPA</label><span>${student.cgpa}</span></div>
-  </div>
-  <div class="body">${body}</div>
-  <div class="footer">
-    <div class="date-block">
-      <div class="date-label">Date of Issue</div>
-      <div class="date-val">${dateStr}</div>
-      <div class="date-label" style="margin-top:8px">Place</div>
-      <div class="date-val">College Campus</div>
-    </div>
-    <div class="sign-block">
-      <div class="sign-line"></div>
-      <div class="sign-name">${student.principal}</div>
-      <div class="sign-title">Principal</div>
-      <div class="sign-title">${student.college}</div>
-    </div>
-    <div class="sign-block">
-      <div class="sign-line"></div>
-      <div class="sign-name">HOD, ${student.dept}</div>
-      <div class="sign-title">Head of Department</div>
-      <div class="sign-title">Academic Year ${student.batch}</div>
-    </div>
-  </div>
-  <div class="qr-box">
-    <img src="${qrUrl}" alt="Verification QR Code" width="100" height="100" style="margin-bottom:8px" />
-    <div class="qr-text">Scan to verify authenticity<br/>${certNo}</div>
-  </div>
-</div>
-</body>
-</html>`
-
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${cert.name}</title><style>body{font-family:Georgia,serif;background:#fff;} .page{width:794px;min-height:1123px;margin:0 auto;padding:60px 70px;position:relative;border:1px solid #e0d9cc;} .outer-border{position:absolute;inset:20px;border:3px double #1a7a4a;pointer-events:none;} .watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:80px;color:rgba(26,122,74,0.04);font-weight:700;pointer-events:none;white-space:nowrap;} h1{text-align:center;color:#1a7a4a;font-size:22px;margin-bottom:4px;} h2{text-align:center;font-size:28px;color:#0f2718;margin:20px 0 4px;letter-spacing:2px;} .cert-no{text-align:center;font-size:11px;color:#7aaa8a;font-family:monospace;margin-bottom:20px;} .student-box{background:#f7fdf9;border:1px solid #d4ead9;border-radius:10px;padding:18px 24px;margin:24px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;} .sf label{font-size:10px;color:#7aaa8a;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px;} .sf span{font-size:13px;font-weight:600;color:#0f2718;} .body{font-size:15px;color:#1a1a1a;line-height:1.9;text-align:justify;margin:28px 0;} .footer{margin-top:48px;display:flex;justify-content:space-between;align-items:flex-end;} .sign{text-align:center;} .sign-line{width:160px;height:1px;background:#0f2718;margin:40px auto 6px;} .sign-name{font-size:13px;font-weight:600;} .sign-title{font-size:11px;color:#7aaa8a;}</style></head><body><div class="page"><div class="outer-border"></div><div class="watermark">NEXUS</div><h1>${student.college.toUpperCase()}</h1><h2>${cert.name.toUpperCase()}</h2><div class="cert-no">Certificate No: ${certNo}</div><div class="student-box"><div class="sf"><label>Student Name</label><span>${student.name}</span></div><div class="sf"><label>Roll Number</label><span>${student.roll}</span></div><div class="sf"><label>Department</label><span>${student.dept}</span></div><div class="sf"><label>Batch</label><span>${student.batch}</span></div><div class="sf"><label>Semester</label><span>${student.semester}</span></div><div class="sf"><label>CGPA</label><span>${student.cgpa}</span></div></div><div class="body">${body}</div><div class="footer"><div><div style="font-size:11px;color:#7aaa8a;">Date of Issue</div><div style="font-size:14px;font-weight:600;">${dateStr}</div></div><div class="sign"><div class="sign-line"></div><div class="sign-name">${student.principal}</div><div class="sign-title">Principal</div></div><div class="sign"><div class="sign-line"></div><div class="sign-name">HOD, ${student.dept}</div><div class="sign-title">Head of Department</div></div></div></div></body></html>`
   const blob = new Blob([html], { type: 'text/html' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
-  a.download = `${cert.name.replace(/ /g, '_')}_${student.roll}.html`
-  a.click()
+  a.href = url; a.download = `${cert.name.replace(/ /g, '_')}_${student.roll}.html`; a.click()
   URL.revokeObjectURL(url)
 }
 
-// ── AI Receipt generator ───────────────────────────────────────────────────
 function generateAIReceipt(due, student, paymentId) {
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   const receiptNo = `RCP-${Date.now().toString().slice(-8)}`
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<title>Payment Receipt - ${receiptNo}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Plus Jakarta Sans',sans-serif;background:#f7fdf9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px 20px;}
-  .receipt{background:#fff;width:420px;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(26,122,74,0.15);}
-  .top{background:linear-gradient(135deg,#1a7a4a,#0f4a2a);padding:32px;color:#fff;text-align:center;}
-  .check{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px;}
-  .paid{font-size:13px;letter-spacing:3px;opacity:0.7;margin-bottom:8px;font-family:'DM Mono',monospace;}
-  .amount{font-size:48px;font-weight:700;margin-bottom:4px;}
-  .item-name{opacity:0.8;font-size:14px;}
-  .body{padding:28px;}
-  .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f7f3;font-size:13px;}
-  .row:last-child{border-bottom:none;}
-  .row label{color:#7aaa8a;}
-  .row span{font-weight:600;color:#0f2718;font-family:'DM Mono',monospace;font-size:12px;}
-  .footer{background:#f7fdf9;padding:20px 28px;text-align:center;border-top:1px solid #d4ead9;}
-  .footer p{font-size:11px;color:#7aaa8a;line-height:1.6;}
-  .nexus{font-family:'DM Mono',monospace;font-size:12px;color:#1a7a4a;font-weight:600;margin-bottom:8px;}
-  .ai-badge{display:inline-flex;align-items:center;gap:6px;background:#eaf7f0;border:1px solid #d4ead9;border-radius:100px;padding:4px 12px;font-size:10px;color:#1a7a4a;font-weight:600;margin-top:10px;}
-  @media print{body{background:#fff;padding:0;}receipt{box-shadow:none;}}
-</style>
-</head>
-<body>
-<div class="receipt">
-  <div class="top">
-    <div class="check">✓</div>
-    <div class="paid">PAYMENT SUCCESSFUL</div>
-    <div class="amount">₹${due.amount}</div>
-    <div class="item-name">${due.item}</div>
-  </div>
-  <div class="body">
-    <div class="row"><label>Receipt No.</label><span>${receiptNo}</span></div>
-    <div class="row"><label>Payment ID</label><span>${paymentId || 'pay_' + Date.now().toString(36).toUpperCase()}</span></div>
-    <div class="row"><label>Student Name</label><span>${student.name}</span></div>
-    <div class="row"><label>Roll Number</label><span>${student.roll}</span></div>
-    <div class="row"><label>Department</label><span>${student.dept}</span></div>
-    <div class="row"><label>Paid To</label><span>${due.dept}</span></div>
-    <div class="row"><label>Purpose</label><span>${due.item}</span></div>
-    <div class="row"><label>Amount</label><span>₹${due.amount}.00</span></div>
-    <div class="row"><label>Date</label><span>${dateStr}</span></div>
-    <div class="row"><label>Time</label><span>${timeStr}</span></div>
-    <div class="row"><label>Status</label><span style="color:#1a7a4a">PAID ✓</span></div>
-  </div>
-  <div class="footer">
-    <div class="nexus">NEXUS GRADUATION PORTAL</div>
-    <p>${student.college}</p>
-    <p>This is a computer-generated receipt and does not require a signature.</p>
-    <div class="ai-badge">✦ AI-Generated Receipt · Digitally Verified</div>
-  </div>
-</div>
-</body>
-</html>`
-
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Receipt</title><style>body{font-family:sans-serif;background:#f7fdf9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px;} .r{background:#fff;width:420px;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(26,122,74,0.15);} .top{background:linear-gradient(135deg,#1a7a4a,#0f4a2a);padding:32px;color:#fff;text-align:center;} .amount{font-size:48px;font-weight:700;} .body{padding:28px;} .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f7f3;font-size:13px;} .row label{color:#7aaa8a;} .row span{font-weight:600;color:#0f2718;} .footer{background:#f7fdf9;padding:20px 28px;text-align:center;border-top:1px solid #d4ead9;font-size:11px;color:#7aaa8a;}</style></head><body><div class="r"><div class="top"><div style="font-size:32px;margin-bottom:12px;">✓</div><div style="font-size:13px;letter-spacing:3px;opacity:0.7;margin-bottom:8px;">PAYMENT SUCCESSFUL</div><div class="amount">₹${due.amount}</div><div style="opacity:0.8;font-size:14px;">${due.item}</div></div><div class="body"><div class="row"><label>Receipt No.</label><span>${receiptNo}</span></div><div class="row"><label>Payment ID</label><span>${paymentId || 'pay_' + Date.now().toString(36).toUpperCase()}</span></div><div class="row"><label>Student Name</label><span>${student.name}</span></div><div class="row"><label>Roll Number</label><span>${student.roll}</span></div><div class="row"><label>Department</label><span>${student.dept}</span></div><div class="row"><label>Paid To</label><span>${due.dept}</span></div><div class="row"><label>Amount</label><span>₹${due.amount}.00</span></div><div class="row"><label>Date</label><span>${dateStr}</span></div><div class="row"><label>Time</label><span>${timeStr}</span></div><div class="row"><label>Status</label><span style="color:#1a7a4a">PAID ✓</span></div></div><div class="footer"><p>${student.college}</p><p>Computer-generated receipt · Digitally Verified</p></div></div></body></html>`
   const blob = new Blob([html], { type: 'text/html' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
-  a.download = `Receipt_${receiptNo}.html`
-  a.click()
+  a.href = url; a.download = `Receipt_${receiptNo}.html`; a.click()
   URL.revokeObjectURL(url)
 }
 
 export default function StudentDashboard() {
   const navigate = useNavigate()
-  // Always read the CURRENT logged-in student on mount
-  const [studentData, setStudentData] = useState(() => getStudentData())
-  const currentRoll = studentData.roll
+  const [student, setStudent] = useState(null)
+  const [loadingStudent, setLoadingStudent] = useState(true)
   const [tab, setTab] = useState('dashboard')
-  const [pipeline, setPipeline] = useState(() => {
-    try {
-      if (currentRoll) {
-        const saved = localStorage.getItem(`nexus_pipeline_${currentRoll}`)
-        if (saved) return JSON.parse(saved)
-      }
-    } catch {}
-    return INITIAL_PIPELINE
-  })
-  const [docs, setDocs] = useState(() => {
-    try {
-      if (currentRoll) {
-        const saved = localStorage.getItem(`nexus_docs_${currentRoll}`)
-        if (saved) return JSON.parse(saved)
-      }
-    } catch {}
-    return INITIAL_DOCS
-  })
-  const [notifs, setNotifs] = useState(() => {
-    try {
-      if (currentRoll) {
-        const saved = localStorage.getItem(`nexus_notifs_${currentRoll}`)
-        if (saved) return JSON.parse(saved)
-      }
-    } catch {}
-    return INITIAL_NOTIFS
-  })
-  const [dues, setDues] = useState(() => {
-    try {
-      if (currentRoll) {
-        const saved = localStorage.getItem(`nexus_dues_${currentRoll}`)
-        if (saved) return JSON.parse(saved)
-      }
-    } catch {}
-    return DUES
-  })
-
-  useEffect(() => {
-    localStorage.setItem(`nexus_dues_${studentData.roll}`, JSON.stringify(dues))
-  }, [dues, studentData.roll])
-  useEffect(() => {
-    if (studentData.roll) localStorage.setItem(`nexus_pipeline_${studentData.roll}`, JSON.stringify(pipeline))
-  }, [pipeline, studentData.roll])
-
-  useEffect(() => {
-    if (studentData.roll) localStorage.setItem(`nexus_docs_${studentData.roll}`, JSON.stringify(docs))
-  }, [docs, studentData.roll])
-
-  useEffect(() => {
-    if (studentData.roll) localStorage.setItem(`nexus_notifs_${studentData.roll}`, JSON.stringify(notifs))
-  }, [notifs, studentData.roll])
-
+  const [pipeline, setPipeline] = useState(INITIAL_PIPELINE)
+  const [docs, setDocs] = useState(INITIAL_DOCS)
+  const [notifs, setNotifs] = useState(INITIAL_NOTIFS)
+  const [dues, setDues] = useState(DUES)
   const [certs, setCerts] = useState(CERTIFICATES)
   const [lockerDocs, setLockerDocs] = useState(LOCKER_DOCS)
   const [uploadModal, setUploadModal] = useState(false)
@@ -415,142 +110,126 @@ export default function StudentDashboard() {
   const fileInputRef = useRef(null)
   const lockerFileRef = useRef(null)
 
-  // Auth guard + load fresh profile from API
+  // ── THE KEY FIX: use nexus_email (what your login saves) ─────────────────
   useEffect(() => {
-    const token = localStorage.getItem('nexus_token')
-    const roll = localStorage.getItem('nexus_roll')
-    if (!token) { navigate('/login'); return }
-    if (!roll) { navigate('/profile-setup'); return }
+    const email = localStorage.getItem('nexus_email')
+    if (!email) { navigate('/login'); return }
 
-    // Fetch latest profile from backend
-    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/profile/${roll}`)
-      .then(r => r.ok ? r.json() : null)
+    fetch(`http://localhost:8000/api/auth/profile/by-email/${email}`)
+      .then(res => { if (!res.ok) throw new Error('not found'); return res.json() })
       .then(data => {
-        if (data && data.roll) {
-          localStorage.setItem('nexus_profile', JSON.stringify(data))
-          setStudentData(getStudentData())
-        }
+        setStudent({
+          name: data.name || 'Unknown',
+          roll: data.roll || '',
+          dept: data.dept || '',
+          email: data.email || email,
+          phone: data.phone || '',
+          batch: data.batch || '',
+          dob: data.dob || '',
+          gender: data.gender || '',
+          cgpa: data.cgpa || '',
+          semester: data.semester || '',
+          hostel: data.hostel || '',
+          advisor: data.advisor || '',
+          clearanceId: data.clearance_id || '',
+          photo: (data.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+          college: data.college || 'Nexus Institute of Technology',
+          principal: 'Dr. R. K. Sharma',
+        })
+        localStorage.setItem('nexus_roll', data.roll)
+        setLoadingStudent(false)
       })
-      .catch(() => { /* offline — use localStorage cache */ })
-
-    // Also fetch clearance status from backend and generate notifications
-    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/auth/clearance/${roll}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(clearances => {
-        if (clearances.length > 0) {
-          setPipeline(prev => {
-            const newPipeline = prev.map(p => {
-              const match = clearances.find(c => c.dept === p.dept)
-              if (match && match.status !== 'pending' && match.status !== p.status) {
-                // Generate notification for status change
-                const commentText = match.comment ? ` — "${match.comment}"` : ''
-                let msg = ''
-                let type = 'info'
-                if (match.status === 'approved') {
-                  msg = `✓ ${p.dept} department has approved your clearance!${commentText}`
-                  type = 'success'
-                } else if (match.status === 'rejected') {
-                  msg = `✗ ${p.dept} department has rejected your clearance.${commentText}`
-                  type = 'error'
-                } else if (match.status === 'flagged') {
-                  msg = `⚠️ ${p.dept} department has flagged an issue with your clearance.${commentText}`
-                  type = 'error'
-                }
-                if (msg) {
-                  setNotifs(nPrev => {
-                    if (!nPrev.some(n => n.msg === msg)) {
-                      return [{ id: Date.now() + Math.random(), msg, time: 'Just now', read: false, type }, ...nPrev]
-                    }
-                    return nPrev
-                  })
-                }
-                return { ...p, status: match.status, comment: match.comment || p.comment }
-              }
-              if (match) return { ...p, status: match.status, comment: match.comment || p.comment }
-              return p
-            })
-            return newPipeline
-          })
-        }
-      })
-      .catch(() => {})
+      .catch(() => navigate('/login'))
   }, [])
+
+  useEffect(() => {
+    if (!student) return
+    initStudentSubmission({
+      studentId: student.roll,
+      studentName: student.name,
+      initials: student.photo,
+      avatarClass: 'blue-bg',
+      dept: student.dept,
+      batch: student.batch
+    })
+    function syncFromStore() {
+      const status = getStudentStatus(student.roll)
+      if (!status) return
+      setPipeline(prev => prev.map(p => {
+        const storeStatus = status.clearanceStatus[p.dept]
+        if (storeStatus && storeStatus !== p.status)
+          return { ...p, status: storeStatus, comment: status.adminComments[p.dept] || p.comment }
+        return p
+      }))
+      if (status.dues) {
+        setDues(status.dues)
+      }
+      if (status.documents) {
+        // Sync our local docs state with the store's documents
+        setDocs(prev => prev.map(d => {
+          const storeDoc = status.documents.find(sd => sd.name === d.name)
+          if (storeDoc) {
+            return { ...d, status: storeDoc.status, size: storeDoc.size, type: storeDoc.type, date: storeDoc.uploadedAt }
+          }
+          return d
+        }))
+      }
+      if (status.notifications && status.notifications.length > 0) {
+        // Filter to only show important notifications
+        const filtered = status.notifications.filter(n => 
+          n.msg.toLowerCase().includes('approved') || 
+          n.msg.toLowerCase().includes('rejected') || 
+          n.msg.toLowerCase().includes('due') || 
+          n.msg.toLowerCase().includes('paid') ||
+          n.type === 'error' || n.type === 'success'
+        )
+        setNotifs([...filtered].sort((a, b) => b.id - a.id))
+      }
+      
+      // Update Certificates Status based on clearance
+      const isAllCleared = INITIAL_PIPELINE.every(p => status.clearanceStatus && status.clearanceStatus[p.dept] === 'approved')
+      setCerts(CERTIFICATES.map(c => 
+        (c.type === 'nodues' || c.type === 'degree') ? { ...c, status: isAllCleared ? 'ready' : 'pending' } : c
+      ))
+    }
+    syncFromStore()
+    return onStoreUpdate(syncFromStore)
+  }, [student])
+
+  if (loadingStudent) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f7f3', fontFamily: 'sans-serif' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+          <div style={{ color: '#1a7a4a', fontWeight: 600 }}>Loading your dashboard...</div>
+        </div>
+      </div>
+    )
+  }
 
   const unread = notifs.filter(n => !n.read).length
   const clearedCount = pipeline.filter(p => p.status === 'approved').length
   const totalDues = dues.filter(d => !d.paid).reduce((s, d) => s + d.amount, 0)
   const allCleared = pipeline.every(p => p.status === 'approved')
-  const uploadedDocs = docs.filter(d => d.size || pipeline.find(p => p.dept === d.targetDept)?.status === 'approved')
+  const uploadedDocs = docs.filter(d => d.size)
   const pendingDues = dues.filter(d => !d.paid).length
 
-  const getDocStatus = (d) => {
-    const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
-    if (pipeStatus === 'approved') return 'verified';
-    return d.size ? d.status : 'missing';
-  };
-
-  useEffect(() => {
-    function syncFromStore() {
-      const status = getStudentStatus(studentData.roll)
-      if (!status) return
-      setPipeline(prev => prev.map(p => {
-        const storeStatus = status.clearanceStatus[p.dept]
-        if (storeStatus && storeStatus !== p.status) {
-          const comment = status.adminComments[p.dept] || p.comment
-          let msg = ''
-          let type = 'info'
-          if (storeStatus === 'approved') {
-            msg = `✓ ${p.dept} department approved your clearance!`
-            type = 'success'
-          } else if (storeStatus === 'rejected') {
-            const reasonText = comment ? ` Reason: ${comment}` : ''
-            msg = `✗ Your ${p.dept} clearance was rejected.${reasonText}`
-            type = 'error'
-          } else if (storeStatus === 'flagged') {
-            const reasonText = comment ? ` Reason: ${comment}` : ''
-            msg = `⚠️ Your ${p.dept} clearance was flagged.${reasonText}`
-            type = 'error'
-          }
-          if (msg) {
-            setNotifs(nPrev => {
-              if (!nPrev.some(n => n.msg === msg)) {
-                return [{ id: Date.now() + Math.random(), msg, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), read: false, type }, ...nPrev]
-              }
-              return nPrev
-            })
-          }
-          return { ...p, status: storeStatus, comment }
-        }
-        return p
-      }))
-    }
-    syncFromStore()
-    return onStoreUpdate(syncFromStore)
-  }, [])
-
-  function showToast(msg, type = 'success') {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
-  }
+  function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   function handleFileSelect(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0]; if (!file) return
     if (file.size > 5 * 1024 * 1024) { showToast('File too large! Max 5MB.', 'error'); return }
     setSelectedFile(file)
   }
 
   function handleLockerFileSelect(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0]; if (!file) return
     if (file.size > 10 * 1024 * 1024) { showToast('File too large! Max 10MB.', 'error'); return }
     const reader = new FileReader()
     reader.onload = () => {
       setLockerDocs(prev => prev.map(d => d.id === lockerUploadTarget
-        ? { ...d, file: file.name, preview: reader.result, size: (file.size / 1024 / 1024).toFixed(1) + ' MB', date: 'Today' }
-        : d))
-      showToast(`${file.name} uploaded to Digital Locker!`)
-      setLockerUploadTarget(null)
+        ? { ...d, file: file.name, preview: reader.result, size: (file.size / 1024 / 1024).toFixed(1) + ' MB', date: 'Today' } : d))
+      showToast(`${file.name} uploaded to Digital Locker!`); setLockerUploadTarget(null)
     }
     reader.readAsDataURL(file)
   }
@@ -562,95 +241,57 @@ export default function StudentDashboard() {
     const fileType = selectedFile ? selectedFile.name.split('.').pop().toUpperCase() : 'PDF'
     const fileSize = selectedFile ? (selectedFile.size / (1024 * 1024)).toFixed(1) + ' MB' : (Math.random() * 3 + 0.5).toFixed(1) + ' MB'
     const targetDept = targetDoc?.targetDept || 'Library'
-
     const processUpload = (dataUrl) => {
-      studentUploadDocument({
-        studentId: studentData.roll, studentName: studentData.name, initials: studentData.photo,
-        avatarClass: 'blue-bg', dept: studentData.dept, batch: studentData.batch,
-        docName: targetDoc?.name || selectedFile?.name || 'Document',
-        docType: fileType, docSize: fileSize, targetDept, fileDataUrl: dataUrl,
-      })
-      // College ID Card is auto-verified on upload
-      const isCollegeId = targetDoc?.name === 'College ID Card'
-      const uploadStatus = isCollegeId ? 'verified' : 'pending'
-      setDocs(prev => prev.map(d => d.id === uploadTarget
-        ? { ...d, status: uploadStatus, size: fileSize, type: fileType, date: 'Today', fileName: selectedFile?.name }
-        : d))
+      studentUploadDocument({ studentId: student.roll, studentName: student.name, initials: student.photo, avatarClass: 'blue-bg', dept: student.dept, batch: student.batch, docName: targetDoc?.name || selectedFile?.name || 'Document', docType: fileType, docSize: fileSize, targetDept, fileDataUrl: dataUrl })
+      setDocs(prev => prev.map(d => d.id === uploadTarget ? { ...d, status: 'pending', size: fileSize, type: fileType, date: 'Today', fileName: selectedFile?.name } : d))
       setUploadModal(false); setUploadTarget(null); setSelectedFile(null); setUploading(false)
-      const statusMsg = isCollegeId ? 'auto-verified' : `sent to ${targetDept} for review`
-      showToast(`✓ "${targetDoc?.name}" uploaded — ${statusMsg}!`)
-      setNotifs(prev => [{ id: Date.now(), msg: `Document "${targetDoc?.name}" ${statusMsg}.`, time: 'Just now', read: false, type: isCollegeId ? 'success' : 'info' }, ...prev])
+      showToast(`✓ "${targetDoc?.name}" uploaded to ${targetDept}!`)
     }
-
-    if (selectedFile) {
-      const reader = new FileReader()
-      reader.onload = () => processUpload(reader.result)
-      reader.readAsDataURL(selectedFile)
-    } else {
-      setTimeout(() => processUpload(null), 500)
-    }
+    if (selectedFile) { const r = new FileReader(); r.onload = () => processUpload(r.result); r.readAsDataURL(selectedFile) }
+    else setTimeout(() => processUpload(null), 500)
   }
 
-  function openPayModal(due) {
-    setPayModal(due); setPayStep('form'); setLastPaymentId(null)
-  }
+  function openPayModal(due) { setPayModal(due); setPayStep('form'); setLastPaymentId(null) }
 
   function loadRazorpayScript() {
     return new Promise(resolve => {
       if (window.Razorpay) { resolve(true); return }
-      const s = document.createElement('script')
-      s.src = 'https://checkout.razorpay.com/v1/checkout.js'
-      s.onload = () => resolve(true)
-      s.onerror = () => resolve(false)
-      document.body.appendChild(s)
+      const s = document.createElement('script'); s.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      s.onload = () => resolve(true); s.onerror = () => resolve(false); document.body.appendChild(s)
     })
   }
 
   async function processPayment() {
     setPayStep('processing')
     const loaded = await loadRazorpayScript()
-    if (!loaded) { showToast('Razorpay failed to load. Check connection.', 'error'); setPayStep('form'); return }
-
+    if (!loaded) { showToast('Razorpay failed to load.', 'error'); setPayStep('form'); return }
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/payment/create-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: payModal.amount, receipt: `receipt_${payModal.id}` })
-      })
+      const response = await fetch('http://localhost:8000/api/payment/create-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: payModal.amount, receipt: `receipt_${payModal.id}` }) })
       const order = await response.json()
       if (!response.ok) { showToast(order.detail || 'Failed to create order', 'error'); setPayStep('form'); return }
-
       const options = {
-        key: order.key_id,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'Nexus Graduation Portal',
-        description: `Payment for ${payModal.item}`,
-        order_id: order.order_id,
+        key: order.key_id, amount: order.amount, currency: order.currency,
+        name: 'Nexus Graduation Portal', description: `Payment for ${payModal.item}`, order_id: order.order_id,
         handler: async (response) => {
           try {
             setPayStep('processing')
-            const verifyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/payment/verify-payment`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              })
-            })
+            const verifyRes = await fetch('http://localhost:8000/api/payment/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: response.razorpay_order_id, razorpay_payment_id: response.razorpay_payment_id, razorpay_signature: response.razorpay_signature }) })
             const verifyData = await verifyRes.json()
             if (verifyRes.ok) {
-              setLastPaymentId(response.razorpay_payment_id)
-              setDues(prev => prev.map(d => d.id === payModal.id ? { ...d, paid: true, paymentId: response.razorpay_payment_id } : d))
-              setPayStep('success')
-              setNotifs(prev => [{ id: Date.now(), msg: `₹${payModal.amount} paid for "${payModal.item}". Receipt ready.`, time: 'Just now', read: false, type: 'success' }, ...prev])
-            } else {
-              showToast(verifyData.detail || 'Verification failed', 'error'); setPayStep('form')
-            }
+              const success = studentPayDue(student.roll, payModal.id, response.razorpay_payment_id)
+              if (success) {
+                setLastPaymentId(response.razorpay_payment_id)
+                setDues(prev => prev.map(d => String(d.id) === String(payModal.id) ? { ...d, paid: true, paymentId: response.razorpay_payment_id } : d))
+                setPayStep('success')
+                setNotifs(prev => [{ id: Date.now(), msg: `₹${payModal.amount} paid for "${payModal.item}". Receipt ready.`, time: 'Just now', read: false, type: 'success' }, ...prev])
+              } else {
+                showToast('Payment verified but store update failed', 'error')
+                setPayStep('form')
+              }
+            } else { showToast(verifyData.detail || 'Verification failed', 'error'); setPayStep('form') }
           } catch { showToast('Error verifying payment', 'error'); setPayStep('form') }
         },
-        prefill: { name: studentData.name, email: studentData.email, contact: studentData.phone?.replace(/\D/g, '') || '' },
+        prefill: { name: student.name, email: student.email, contact: (student.phone || '').replace(/\D/g, '') },
         theme: { color: '#1a7a4a' }
       }
       const rz = new window.Razorpay(options)
@@ -659,9 +300,19 @@ export default function StudentDashboard() {
     } catch { showToast('Error initiating payment', 'error'); setPayStep('form') }
   }
 
-  function markAllRead() {
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })))
-    showToast('All notifications marked as read')
+  function markAllRead() { 
+    import('../../utils/clearanceStore').then(m => {
+      if (student?.roll) m.studentMarkNotificationsRead(student.roll)
+    })
+    setNotifs(prev => prev.map(n => ({ ...n, read: true }))); 
+    showToast('All notifications marked as read') 
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('nexus_email'); localStorage.removeItem('nexus_token')
+    localStorage.removeItem('nexus_role'); localStorage.removeItem('nexus_roll')
+    localStorage.removeItem('nexus_profile')
+    navigate('/login')
   }
 
   const G = '#1a7a4a'; const GM = '#22a05e'; const GL = '#d6f0e2'; const GX = '#eaf7f0'
@@ -686,25 +337,14 @@ export default function StudentDashboard() {
       <div style={{ display: 'flex', alignItems: 'flex-start', padding: mini ? '0.25rem 0' : '0.5rem 0' }}>
         {pipeline.map((s, i) => {
           const isActive = s.status === 'pending' && pipeline.slice(0, i).every(x => x.status === 'approved')
-          const cls = isActive ? 'active' : s.status
-          const size = mini ? 22 : 30
-          
-          let bg = '#edf7f1', border = B, text = T3, shadow = 'none', icon = s.id, lbl = 'Awaiting', lblColor = T3
-          if (cls === 'approved') { bg = GM; border = GM; text = S; icon = '✓'; lbl = 'Cleared'; lblColor = GM }
-          else if (cls === 'rejected') { bg = RL; border = R; text = R; icon = '✗'; lbl = 'Rejected'; lblColor = R }
-          else if (cls === 'active') { bg = AL; border = AM; text = AM; shadow = `0 0 0 5px ${AL}`; lbl = 'In Review'; lblColor = AM }
-          else if (cls === 'pending') { bg = AL; border = AM; text = AM; lbl = 'Awaiting'; lblColor = AM }
-
+          const cls = isActive ? 'active' : s.status; const size = mini ? 22 : 30
           return (
             <div key={s.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, position: 'relative' }}>
-              {i < pipeline.length - 1 && <div style={{ position: 'absolute', top: size / 2 - 1, left: '50%', width: '100%', height: 2, background: s.status === 'approved' ? GM : '#f5d99a', zIndex: 0 }} />}
-              <div style={{ width: size, height: size, borderRadius: '50%', background: bg, border: `2px solid ${border}`, color: text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: mini ? '0.55rem' : '0.7rem', fontWeight: 700, zIndex: 1, position: 'relative', boxShadow: shadow }}>
-                {icon}
+              {i < pipeline.length - 1 && <div style={{ position: 'absolute', top: size / 2 - 1, left: '50%', width: '100%', height: 2, background: s.status === 'approved' ? GM : '#d4ead9', zIndex: 0 }} />}
+              <div style={{ width: size, height: size, borderRadius: '50%', background: cls === 'approved' ? GM : (cls === 'rejected' || cls === 'flagged') ? RL : cls === 'active' ? S : '#edf7f1', border: (cls === 'rejected' || cls === 'flagged') ? `2px solid ${R}` : cls === 'active' ? `2px solid ${GM}` : cls === 'approved' ? `2px solid ${GM}` : `2px solid ${B}`, color: cls === 'approved' ? S : (cls === 'rejected' || cls === 'flagged') ? R : cls === 'active' ? G : T3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: mini ? '0.55rem' : '0.7rem', fontWeight: 700, zIndex: 1, position: 'relative', boxShadow: cls === 'active' ? `0 0 0 5px ${GL}` : 'none' }}>
+                {cls === 'approved' ? '✓' : (cls === 'rejected' || cls === 'flagged') ? '✗' : s.id}
               </div>
-              {!mini && <>
-                <div style={{ fontSize: '0.62rem', color: T2, fontWeight: cls === 'approved' || cls === 'active' ? 600 : 400, textAlign: 'center' }}>{s.dept}</div>
-                <div style={{ fontSize: '0.58rem', color: lblColor }}>{lbl}</div>
-              </>}
+              {!mini && <><div style={{ fontSize: '0.62rem', color: (cls === 'rejected' || cls === 'flagged') ? R : cls === 'pending' && !isActive ? T3 : T2, fontWeight: isActive || cls === 'approved' ? 600 : 400, textAlign: 'center' }}>{s.dept}</div><div style={{ fontSize: '0.58rem', color: cls === 'approved' ? GM : (cls === 'rejected' || cls === 'flagged') ? R : isActive ? AM : T3 }}>{cls === 'approved' ? 'Cleared' : (cls === 'rejected' || cls === 'flagged') ? 'Rejected' : isActive ? 'In Review' : 'Awaiting'}</div></>}
             </div>
           )
         })}
@@ -716,24 +356,19 @@ export default function StudentDashboard() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 260px', gap: '1rem' }}>
-          {[
-            ['Departments Cleared', `${clearedCount}/${pipeline.length}`, clearedCount > 0 ? G : AM, `${pipeline.length - clearedCount} remaining`],
-            ['Docs Uploaded', uploadedDocs.length, G, `of ${docs.length} required`],
-            ['Dues Pending', totalDues > 0 ? `₹${totalDues}` : 'Nil', totalDues > 0 ? R : G, totalDues > 0 ? `${pendingDues} items` : 'All clear'],
-            ['Unread Alerts', unread, unread > 0 ? AM : G, unread > 0 ? 'Tap to view' : 'All read'],
-          ].map(([lbl, val, color, sub]) => (
+          {[['Departments Cleared', `${clearedCount}/${pipeline.length}`, clearedCount > 0 ? G : AM, `${pipeline.length - clearedCount} remaining`], ['Docs Uploaded', uploadedDocs.length, G, `of ${docs.length} required`], ['Dues Pending', totalDues > 0 ? `₹${totalDues}` : 'Nil', totalDues > 0 ? R : G, totalDues > 0 ? `${pendingDues} items` : 'All clear'], ['Unread Alerts', unread, unread > 0 ? AM : G, unread > 0 ? 'Tap to view' : 'All read']].map(([lbl, val, color, sub]) => (
             <div key={lbl} style={{ ...card, padding: '1.25rem 1.5rem' }}>
               <div style={{ fontSize: '0.72rem', color: T3, fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{lbl}</div>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div>
               <div style={{ fontSize: '0.72rem', color: T3 }}>{sub}</div>
             </div>
           ))}
-          <div style={{ background: `linear-gradient(135deg,${G} 0%,#0f4a2a 100%)`, borderRadius: 18, padding: '1.25rem', color: S, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ background: `linear-gradient(135deg,${G} 0%,#0f4a2a 100%)`, borderRadius: 18, padding: '1.25rem', color: S }}>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.6rem', letterSpacing: '0.2em', opacity: 0.6, marginBottom: 10 }}>COLLEGE ID</div>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: G, marginBottom: 8 }}>{studentData.photo}</div>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>{studentData.name}</div>
-            <div style={{ fontSize: '0.72rem', opacity: 0.7, marginBottom: 6 }}>{studentData.dept}</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.7rem', opacity: 0.8 }}>{studentData.roll}</div>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: G, marginBottom: 8 }}>{student.photo}</div>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>{student.name}</div>
+            <div style={{ fontSize: '0.72rem', opacity: 0.7, marginBottom: 6 }}>{student.dept}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.7rem', opacity: 0.8 }}>{student.roll}</div>
           </div>
         </div>
         <div style={card}>
@@ -749,42 +384,19 @@ export default function StudentDashboard() {
               <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Recent Documents</div>
               <button style={btnSm} onClick={() => setTab('documents')}>View All</button>
             </div>
-            {docs.slice(0, 4).map(d => {
-              const status = getDocStatus(d);
-              return (
+            {docs.slice(0, 4).map(d => (
               <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: `1px solid ${BG}` }}>
                 <span style={{ fontSize: 16 }}>{d.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{d.name}</div>
-                  <div style={{ fontSize: '0.68rem', color: T3 }}>{d.size ? `${d.type} · ${d.size}` : (status === 'verified' ? 'Cleared by Admin' : 'Not uploaded')}</div>
-                </div>
-                <span style={badge(status)}>{status}</span>
+                <div style={{ flex: 1 }}><div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: '0.68rem', color: T3 }}>{d.size ? `${d.type} · ${d.size}` : 'Not uploaded'}</div></div>
+                <span style={badge(d.size ? d.status : 'missing')}>{d.size ? d.status : 'missing'}</span>
               </div>
-            )})}
+            ))}
           </div>
           <div style={card}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '1rem' }}>Pending Actions</div>
-            {totalDues > 0 && (
-              <div style={{ background: RL, borderRadius: 10, padding: '0.85rem 1rem', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: R }}>Dues Pending</div>
-                  <div style={{ fontSize: '0.72rem', color: '#8b3a35' }}>₹{totalDues} outstanding</div>
-                </div>
-                <button style={btn(R, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => setTab('dues')}>Pay Now</button>
-              </div>
-            )}
-            {docs.filter(d => !d.size && getDocStatus(d) !== 'verified').slice(0, 2).map(d => (
-              <div key={d.id} style={{ background: AL, borderRadius: 10, padding: '0.85rem 1rem', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: AM }}>{d.name} Missing</div>
-                  <div style={{ fontSize: '0.72rem', color: '#8b5e10' }}>Upload required</div>
-                </div>
-                <button style={btn(AM, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button>
-              </div>
-            ))}
-            {totalDues === 0 && docs.filter(d => !d.size && getDocStatus(d) !== 'verified').length === 0 && (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: G, fontWeight: 600 }}>🎉 No pending actions!</div>
-            )}
+            {totalDues > 0 && <div style={{ background: RL, borderRadius: 10, padding: '0.85rem 1rem', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: R }}>Dues Pending</div><div style={{ fontSize: '0.72rem', color: '#8b3a35' }}>₹{totalDues} outstanding</div></div><button style={btn(R, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => setTab('dues')}>Pay Now</button></div>}
+            {docs.filter(d => !d.size).slice(0, 2).map(d => (<div key={d.id} style={{ background: AL, borderRadius: 10, padding: '0.85rem 1rem', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: AM }}>{d.name} Missing</div><div style={{ fontSize: '0.72rem', color: '#8b5e10' }}>Upload required</div></div><button style={btn(AM, S, { fontSize: '0.78rem', padding: '0.35rem 0.85rem' })} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button></div>))}
+            {totalDues === 0 && docs.filter(d => !d.size).length === 0 && <div style={{ textAlign: 'center', padding: '1.5rem', color: G, fontWeight: 600 }}>🎉 No pending actions!</div>}
           </div>
         </div>
       </div>
@@ -800,10 +412,10 @@ export default function StudentDashboard() {
             <span style={badge(allCleared ? 'approved' : 'pending')}>{allCleared ? 'Cleared' : 'In Progress'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-            {[['Student', studentData.name], ['Roll No.', studentData.roll], ['Department', studentData.dept], ['Batch', studentData.batch], ['Clearance ID', studentData.clearanceId], ['Submitted', '15 Apr 2025']].map(([k, v]) => (
+            {[['Student', student.name], ['Roll No.', student.roll], ['Department', student.dept], ['Batch', student.batch], ['Clearance ID', student.clearanceId], ['Submitted', '15 Apr 2025']].map(([k, v]) => (
               <div key={k} style={{ background: BG, borderRadius: 10, padding: '0.85rem 1rem' }}>
                 <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k}</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: k === 'Clearance ID' ? G : T, fontFamily: k === 'Clearance ID' ? "'DM Mono',monospace" : 'inherit' }}>{v}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: k === 'Clearance ID' ? G : T, fontFamily: k === 'Clearance ID' ? "'DM Mono',monospace" : 'inherit' }}>{v || '—'}</div>
               </div>
             ))}
           </div>
@@ -831,31 +443,22 @@ export default function StudentDashboard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem' }}>Document Vault</div>
-              <div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>{uploadedDocs.length} of {docs.length} uploaded</div>
-            </div>
+            <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>Document Vault</div><div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>{uploadedDocs.length} of {docs.length} uploaded</div></div>
             <button style={btn(G, S)} onClick={() => setUploadModal(true)}>+ Upload Document</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
-            {docs.map(d => {
-              const pipeStatus = pipeline.find(p => p.dept === d.targetDept)?.status;
-              const status = pipeStatus === 'approved' ? 'verified' : (d.size ? d.status : 'missing');
-              const isVerified = status === 'verified';
-              return (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '1rem', borderRadius: 12, border: `1px solid ${d.size || isVerified ? B2 : B}`, background: d.size || isVerified ? GX : S }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: d.size || isVerified ? GL : BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{d.icon}</div>
+            {docs.map(d => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '1rem', borderRadius: 12, border: `1px solid ${d.size ? B2 : B}`, background: d.size ? GX : S }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: d.size ? GL : BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{d.icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 2 }}>{d.name}</div>
-                  <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 5 }}>{d.size ? `${d.type} · ${d.size} · ${d.date}` : (isVerified ? 'Cleared by Admin' : 'Not uploaded yet')}</div>
-                  <span style={badge(status)}>{status}</span>
+                  <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 5 }}>{d.size ? `${d.type} · ${d.size} · ${d.date}` : 'Not uploaded yet'}</div>
+                  <span style={badge(d.size ? d.status : 'missing')}>{d.size ? d.status : 'missing'}</span>
                 </div>
-                {d.size || isVerified
-                  ? <div style={{ width: 24, height: 24, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G, fontSize: '0.8rem' }}>✓</div>
-                  : <button style={btnSm} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button>
-                }
+                {d.size ? <div style={{ width: 24, height: 24, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G, fontSize: '0.8rem' }}>✓</div>
+                  : <button style={btnSm} onClick={() => { setUploadTarget(d.id); setUploadModal(true) }}>Upload</button>}
               </div>
-            )})}
+            ))}
           </div>
         </div>
       </div>
@@ -863,16 +466,13 @@ export default function StudentDashboard() {
   }
 
   function TabHeatmap() {
-    const hmData = pipeline.map((s, i) => {
-      const isActive = s.status === 'pending' && pipeline.slice(0, i).every(x => x.status === 'approved')
-      return { ...s, disp: isActive ? 'inreview' : s.status === 'pending' ? 'waiting' : s.status }
-    })
-    const statusConfig = {
-      approved: { bg: GL, border: B2, dot: GM, label: 'Cleared', text: G },
-      inreview: { bg: AL, border: '#f5d99a', dot: AM, label: 'In Review', text: AM },
-      waiting: { bg: AL, border: '#f5d99a', dot: AM, label: 'Awaiting', text: AM },
-      rejected: { bg: RL, border: '#f5c6c2', dot: R, label: 'Rejected', text: R },
-      flagged: { bg: RL, border: '#f5c6c2', dot: R, label: 'Flagged', text: R },
+    const hmData = pipeline.map((s, i) => { const isActive = s.status === 'pending' && pipeline.slice(0, i).every(x => x.status === 'approved'); return { ...s, disp: isActive ? 'inreview' : s.status === 'pending' ? 'waiting' : s.status } })
+    const statusConfig = { 
+      approved: { bg: GL, border: B2, dot: GM, label: 'Cleared', text: G }, 
+      inreview: { bg: AL, border: '#f5d99a', dot: AM, label: 'In Review', text: AM }, 
+      waiting: { bg: AL, border: '#f5d99a', dot: AM, label: 'Pending', text: AM }, 
+      rejected: { bg: RL, border: '#f5c6c2', dot: R, label: 'No Dues / Rejected', text: R },
+      flagged: { bg: RL, border: '#f5c6c2', dot: R, label: 'Flagged / Rejected', text: R } 
     }
     const cleared = pipeline.filter(p => p.status === 'approved').length
     const pct = Math.round((cleared / pipeline.length) * 100)
@@ -888,15 +488,12 @@ export default function StudentDashboard() {
             <div style={{ position: 'relative', width: 100, height: 100 }}>
               <svg viewBox="0 0 100 100" style={{ width: 100, height: 100, transform: 'rotate(-90deg)' }}>
                 <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="8" />
-                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="8"
-                  strokeDasharray={`${2 * Math.PI * 40}`} strokeDashoffset={`${2 * Math.PI * 40 * (1 - pct / 100)}`} strokeLinecap="round" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="8" strokeDasharray={`${2 * Math.PI * 40}`} strokeDashoffset={`${2 * Math.PI * 40 * (1 - pct / 100)}`} strokeLinecap="round" />
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: 700 }}>{cleared}/{pipeline.length}</div>
             </div>
           </div>
-          <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-            <PipelineBar mini />
-          </div>
+          <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.15)' }}><PipelineBar mini /></div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1rem' }}>
           {hmData.map(h => {
@@ -912,7 +509,6 @@ export default function StudentDashboard() {
                 </div>
                 {h.comment && <div style={{ fontSize: '0.65rem', color: T3, fontStyle: 'italic', marginTop: 6 }}>"{h.comment}"</div>}
                 {h.disp === 'approved' && <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: GM, display: 'flex', alignItems: 'center', justifyContent: 'center', color: S, fontSize: '0.6rem' }}>✓</div>}
-                {h.disp === 'rejected' && <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: R, display: 'flex', alignItems: 'center', justifyContent: 'center', color: S, fontSize: '0.6rem' }}>✗</div>}
               </div>
             )
           })}
@@ -927,29 +523,16 @@ export default function StudentDashboard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem' }}>Dues & Payments</div>
-              <div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>Pay all dues to unblock clearance</div>
-            </div>
+            <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>Dues & Payments</div><div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>Pay all dues to unblock clearance</div></div>
             <span style={badge(totalDues > 0 ? 'flagged' : 'approved')}>{totalDues > 0 ? `₹${totalDues} pending` : 'All clear'}</span>
           </div>
           {dues.map(d => (
             <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '1rem 1.25rem', borderRadius: 12, border: `1px solid ${d.paid ? B2 : '#f5c6c2'}`, background: d.paid ? GX : RL, marginBottom: 10 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 11, background: d.paid ? GL : '#fbd5d1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                {d.paid ? '✅' : '⚠️'}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{d.item}</div>
-                <div style={{ fontSize: '0.72rem', color: T3, marginTop: 2 }}>{d.dept}</div>
-              </div>
+              <div style={{ width: 42, height: 42, borderRadius: 11, background: d.paid ? GL : '#fbd5d1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{d.paid ? '✅' : '⚠️'}</div>
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{d.item}</div><div style={{ fontSize: '0.72rem', color: T3, marginTop: 2 }}>{d.dept}</div></div>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.5rem', color: d.paid ? G : R, marginRight: 8 }}>₹{d.amount}</div>
-              {d.paid
-                ? <div style={{ display: 'flex', gap: 6 }}>
-                  <span style={badge('approved')}>Paid ✓</span>
-                  <button style={btnSm} onClick={() => generateAIReceipt(d, studentData, d.paymentId)}>↓ Receipt</button>
-                </div>
-                : <button style={btn(R, S)} onClick={() => openPayModal(d)}>Pay Now</button>
-              }
+              {d.paid ? <div style={{ display: 'flex', gap: 6 }}><span style={badge('approved')}>Paid ✓</span><button style={btnSm} onClick={() => generateAIReceipt(d, student, d.paymentId)}>↓ Receipt</button></div>
+                : <button style={btn(R, S)} onClick={() => openPayModal(d)}>Pay Now</button>}
             </div>
           ))}
         </div>
@@ -958,14 +541,8 @@ export default function StudentDashboard() {
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '1rem' }}>Payment History</div>
             {paidDues.map(d => (
               <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: `1px solid ${BG}`, fontSize: '0.85rem', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{d.item}</div>
-                  <div style={{ fontSize: '0.7rem', color: T3 }}>{d.dept} · AI Receipt available</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ color: G, fontWeight: 700 }}>₹{d.amount}</div>
-                  <button style={btnSm} onClick={() => generateAIReceipt(d, studentData, d.paymentId)}>↓ Download Receipt</button>
-                </div>
+                <div><div style={{ fontWeight: 600 }}>{d.item}</div><div style={{ fontSize: '0.7rem', color: T3 }}>{d.dept} · Receipt available</div></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ color: G, fontWeight: 700 }}>₹{d.amount}</div><button style={btnSm} onClick={() => generateAIReceipt(d, student, d.paymentId)}>↓ Receipt</button></div>
               </div>
             ))}
           </div>
@@ -978,19 +555,13 @@ export default function StudentDashboard() {
     return (
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '1rem' }}>Notifications</div>
-            <div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>{unread} unread</div>
-          </div>
+          <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>Notifications</div><div style={{ fontSize: '0.75rem', color: T3, marginTop: 2 }}>{unread} unread</div></div>
           <button style={btnSm} onClick={markAllRead}>Mark all read</button>
         </div>
         {notifs.map(n => (
           <div key={n.id} style={{ display: 'flex', gap: 12, padding: '0.9rem 0', borderBottom: `1px solid ${BG}` }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: n.read ? B : n.type === 'success' ? GM : AM, flexShrink: 0, marginTop: 6 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.85rem', color: T2, fontWeight: n.read ? 400 : 600 }}>{n.msg}</div>
-              <div style={{ fontSize: '0.7rem', color: T3, marginTop: 3 }}>{n.time}</div>
-            </div>
+            <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', color: T2, fontWeight: n.read ? 400 : 600 }}>{n.msg}</div><div style={{ fontSize: '0.7rem', color: T3, marginTop: 3 }}>{n.time}</div></div>
             {!n.read && <button style={btnSm} onClick={() => setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}>Read</button>}
           </div>
         ))}
@@ -999,72 +570,16 @@ export default function StudentDashboard() {
   }
 
   function TabCertificates() {
-    // Dynamically compute cert status: certs that require all clearances check allCleared
-    const computedCerts = certs.map(c => ({
-      ...c,
-      status: c.requiresAllClear ? (allCleared ? 'ready' : 'pending') : c.status,
-    }))
-    const readyCerts = computedCerts.filter(c => c.status === 'ready')
-    const pendingCerts = computedCerts.filter(c => c.status === 'pending')
+    const readyCerts = certs.filter(c => c.status === 'ready'); const pendingCerts = certs.filter(c => c.status === 'pending')
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-          {[['Total Certificates', computedCerts.length, T], ['Ready to Download', readyCerts.length, G], ['Pending Approval', pendingCerts.length, AM]].map(([lbl, val, color]) => (
-            <div key={lbl} style={{ ...card, padding: '1.1rem 1.4rem', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2.2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div>
-              <div style={{ fontSize: '0.75rem', color: T3, fontWeight: 600 }}>{lbl}</div>
-            </div>
+          {[['Total Certificates', certs.length, T], ['Ready to Download', readyCerts.length, G], ['Pending Approval', pendingCerts.length, AM]].map(([lbl, val, color]) => (
+            <div key={lbl} style={{ ...card, padding: '1.1rem 1.4rem', textAlign: 'center' }}><div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2.2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div><div style={{ fontSize: '0.75rem', color: T3, fontWeight: 600 }}>{lbl}</div></div>
           ))}
         </div>
-
-        {readyCerts.length > 0 && (
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: G, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>✓ Ready for Download</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {readyCerts.map(c => (
-                <div key={c.id} style={{ background: GX, border: `1.5px solid ${B2}`, borderRadius: 16, padding: '1.25rem', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🎓</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{c.name}</div>
-                    <div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button style={btn(G, S, { fontSize: '0.78rem', padding: '0.4rem 1rem' })}
-                        onClick={() => { generateCertificatePDF(c, studentData); showToast(`${c.name} downloaded!`) }}>
-                        ↓ Download PDF
-                      </button>
-                    </div>
-                    <div style={{ marginTop: 8, fontSize: '0.65rem', color: T3, fontFamily: "'DM Mono',monospace" }}>
-                      ID: {studentData.roll}-{c.type.toUpperCase()}
-                    </div>
-                  </div>
-                  <span style={badge('approved')}>Ready</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {pendingCerts.length > 0 && (
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: AM, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>⏳ Pending Approval</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {pendingCerts.map(c => (
-                <div key={c.id} style={{ background: S, border: `1px solid ${B}`, borderRadius: 16, padding: '1.25rem', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: AL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>📋</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{c.name}</div>
-                    <div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: AL, borderRadius: 7, padding: '0.4rem 0.75rem' }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: AM }} />
-                      <span style={{ fontSize: '0.72rem', color: AM, fontWeight: 600 }}>{c.requiresAllClear ? 'Requires all department clearances' : 'Awaiting department approval'}</span>
-                    </div>
-                  </div>
-                  <span style={badge('pending')}>Pending</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {readyCerts.length > 0 && <div><div style={{ fontSize: '0.75rem', fontWeight: 700, color: G, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>✓ Ready for Download</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>{readyCerts.map(c => (<div key={c.id} style={{ background: GX, border: `1.5px solid ${B2}`, borderRadius: 16, padding: '1.25rem', display: 'flex', gap: 14, alignItems: 'flex-start' }}><div style={{ width: 44, height: 44, borderRadius: 12, background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🎓</div><div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{c.name}</div><div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div><button style={btn(G, S, { fontSize: '0.78rem', padding: '0.4rem 1rem' })} onClick={() => { generateCertificatePDF(c, student); showToast(`${c.name} downloaded!`) }}>↓ Download PDF</button><div style={{ marginTop: 8, fontSize: '0.65rem', color: T3, fontFamily: "'DM Mono',monospace" }}>ID: {student.roll}-{c.type.toUpperCase()}</div></div><span style={badge('approved')}>Ready</span></div>))}</div></div>}
+        {pendingCerts.length > 0 && <div><div style={{ fontSize: '0.75rem', fontWeight: 700, color: AM, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>⏳ Pending Approval</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>{pendingCerts.map(c => (<div key={c.id} style={{ background: S, border: `1px solid ${B}`, borderRadius: 16, padding: '1.25rem', display: 'flex', gap: 14, alignItems: 'flex-start' }}><div style={{ width: 44, height: 44, borderRadius: 12, background: AL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>📋</div><div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{c.name}</div><div style={{ fontSize: '0.72rem', color: T3, marginBottom: 8 }}>{c.dept} · {c.desc}</div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: AL, borderRadius: 7, padding: '0.4rem 0.75rem' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: AM }} /><span style={{ fontSize: '0.72rem', color: AM, fontWeight: 600 }}>Awaiting department approval</span></div></div><span style={badge('pending')}>Pending</span></div>))}</div></div>}
       </div>
     )
   }
@@ -1074,58 +589,29 @@ export default function StudentDashboard() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <input ref={lockerFileRef} type="file" accept="image/*,.pdf,.doc,.docx" style={{ display: 'none' }} onChange={handleLockerFileSelect} />
-
-        {/* Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1rem' }}>
-          {[
-            ['Total Slots', lockerDocs.length, T],
-            ['Uploaded', lockerDocs.filter(d => d.file).length, G],
-            ['Pending Upload', lockerDocs.filter(d => !d.file).length, AM],
-          ].map(([lbl, val, color]) => (
-            <div key={lbl} style={{ ...card, padding: '1.1rem 1.4rem', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div>
-              <div style={{ fontSize: '0.75rem', color: T3, fontWeight: 600 }}>{lbl}</div>
-            </div>
+          {[['Total Slots', lockerDocs.length, T], ['Uploaded', lockerDocs.filter(d => d.file).length, G], ['Pending Upload', lockerDocs.filter(d => !d.file).length, AM]].map(([lbl, val, color]) => (
+            <div key={lbl} style={{ ...card, padding: '1.1rem 1.4rem', textAlign: 'center' }}><div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '2rem', color, lineHeight: 1, marginBottom: 4 }}>{val}</div><div style={{ fontSize: '0.75rem', color: T3, fontWeight: 600 }}>{lbl}</div></div>
           ))}
         </div>
-
         {categories.map(cat => (
           <div key={cat} style={card}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: G, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>{cat} Documents</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
               {lockerDocs.filter(d => d.category === cat).map(d => (
                 <div key={d.id} style={{ border: `1px solid ${d.file ? B2 : B}`, borderRadius: 14, overflow: 'hidden', background: d.file ? GX : S }}>
-                  {/* Preview area */}
-                  <div style={{ height: 120, background: d.file ? BG : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: d.file ? 'pointer' : 'default' }}
-                    onClick={() => d.file && setPreviewDoc(d)}>
-                    {d.preview && d.preview.startsWith('data:image') ? (
-                      <img src={d.preview} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : d.file ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 36 }}>📄</div>
-                        <div style={{ fontSize: '0.7rem', color: T2, fontWeight: 600, marginTop: 4 }}>{d.file}</div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', opacity: 0.4 }}>
-                        <div style={{ fontSize: 32 }}>{d.icon}</div>
-                        <div style={{ fontSize: '0.68rem', color: T3, marginTop: 4 }}>Not uploaded</div>
-                      </div>
-                    )}
-                    {d.file && (
-                      <div style={{ position: 'absolute', top: 6, right: 6, background: G, color: S, borderRadius: 100, fontSize: '0.6rem', fontWeight: 700, padding: '2px 8px' }}>✓</div>
-                    )}
+                  <div style={{ height: 120, background: d.file ? BG : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: d.file ? 'pointer' : 'default' }} onClick={() => d.file && setPreviewDoc(d)}>
+                    {d.preview && d.preview.startsWith('data:image') ? <img src={d.preview} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : d.file ? <div style={{ textAlign: 'center' }}><div style={{ fontSize: 36 }}>📄</div><div style={{ fontSize: '0.7rem', color: T2, fontWeight: 600, marginTop: 4 }}>{d.file}</div></div>
+                        : <div style={{ textAlign: 'center', opacity: 0.4 }}><div style={{ fontSize: 32 }}>{d.icon}</div><div style={{ fontSize: '0.68rem', color: T3, marginTop: 4 }}>Not uploaded</div></div>}
+                    {d.file && <div style={{ position: 'absolute', top: 6, right: 6, background: G, color: S, borderRadius: 100, fontSize: '0.6rem', fontWeight: 700, padding: '2px 8px' }}>✓</div>}
                   </div>
-                  {/* Doc info + actions */}
                   <div style={{ padding: '0.75rem' }}>
                     <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 3 }}>{d.name}</div>
                     {d.file && <div style={{ fontSize: '0.68rem', color: T3, marginBottom: 8 }}>{d.size} · {d.date}</div>}
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button style={{ ...btnSm, flex: 1 }} onClick={() => { setLockerUploadTarget(d.id); lockerFileRef.current?.click() }}>
-                        {d.file ? '↺ Replace' : '↑ Upload'}
-                      </button>
-                      {d.file && (
-                        <button style={{ ...btnSm, flex: 1 }} onClick={() => setPreviewDoc(d)}>👁 Preview</button>
-                      )}
+                      <button style={{ ...btnSm, flex: 1 }} onClick={() => { setLockerUploadTarget(d.id); lockerFileRef.current?.click() }}>{d.file ? '↺ Replace' : '↑ Upload'}</button>
+                      {d.file && <button style={{ ...btnSm, flex: 1 }} onClick={() => setPreviewDoc(d)}>👁 Preview</button>}
                     </div>
                   </div>
                 </div>
@@ -1133,18 +619,13 @@ export default function StudentDashboard() {
             </div>
           </div>
         ))}
-
-        {/* Clearance docs in locker */}
         {uploadedDocs.length > 0 && (
           <div style={card}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: G, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>Clearance Documents</div>
             {uploadedDocs.map(d => (
               <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.85rem 0', borderBottom: `1px solid ${BG}` }}>
                 <span style={{ fontSize: 18 }}>{d.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{d.name}</div>
-                  <div style={{ fontSize: '0.7rem', color: T3 }}>{d.type} · {d.size} · {d.date}</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: '0.7rem', color: T3 }}>{d.type} · {d.size} · {d.date}</div></div>
                 <span style={badge(d.status)}>{d.status}</span>
               </div>
             ))}
@@ -1154,44 +635,42 @@ export default function StudentDashboard() {
     )
   }
 
-  const tabContent = {
-    dashboard: <TabDashboard />,
-    application: <TabApplication />,
-    documents: <TabDocuments />,
-    heatmap: <TabHeatmap />,
-    dues: <TabDues />,
-    notifications: <TabNotifications />,
-    certificates: <TabCertificates />,
-    locker: <TabLocker />,
-  }
+  const tabContent = { dashboard: <TabDashboard />, application: <TabApplication />, documents: <TabDocuments />, heatmap: <TabHeatmap />, dues: <TabDues />, notifications: <TabNotifications />, certificates: <TabCertificates />, locker: <TabLocker /> }
 
   return (
     <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", background: BG, minHeight: '100vh', color: T }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.8} }
-        * { box-sizing: border-box; }
-      `}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap'); @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.8} } * { box-sizing: border-box; }`}</style>
 
       {/* TOPBAR */}
       <div style={{ background: S, borderBottom: `1px solid ${B}`, padding: '0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 56, position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.9rem', letterSpacing: '0.18em', color: G, textTransform: 'uppercase', cursor: 'pointer' }} onClick={() => navigate('/')}>NEXUS</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: '0.9rem', letterSpacing: '0.18em', color: G, textTransform: 'uppercase', cursor: 'pointer' }} onClick={() => navigate('/')}>NEXUS</div>
+          {allCleared && (
+            <button 
+              id="no-dues-cert-btn"
+              style={{ ...btn(GM, S), fontSize: '0.75rem', padding: '0.35rem 1rem', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 100, boxShadow: '0 4px 12px rgba(34, 160, 94, 0.2)' }}
+              onClick={() => { generateCertificatePDF(certs.find(c => c.type === 'nodues'), student); showToast('No Dues Certificate Generated!') }}
+            >
+              📜 No Dues Certificate
+            </button>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
           {unread > 0 && <div style={{ background: AM, color: S, borderRadius: 100, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }} onClick={() => setTab('notifications')}>{unread} new</div>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '0.4rem 0.75rem', borderRadius: 10, border: `1px solid ${B}`, background: profileOpen ? GX : S }} onClick={() => setProfileOpen(!profileOpen)}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: T2 }}>{studentData.name}</span>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{student.photo}</div>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: T2 }}>{student.name}</span>
             <span style={{ fontSize: '0.7rem', color: T3 }}>{profileOpen ? '▲' : '▼'}</span>
           </div>
-          <button style={{ background: 'none', border: `1px solid ${B}`, borderRadius: 8, padding: '0.4rem 0.85rem', fontSize: '0.8rem', color: T3, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { localStorage.removeItem('nexus_token'); localStorage.removeItem('nexus_role'); localStorage.removeItem('nexus_email'); localStorage.removeItem('nexus_roll'); localStorage.removeItem('nexus_profile'); navigate('/login') }}>Log out</button>
+          <button style={{ background: 'none', border: `1px solid ${B}`, borderRadius: 8, padding: '0.4rem 0.85rem', fontSize: '0.8rem', color: T3, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleLogout}>Log out</button>
           {profileOpen && (
             <div style={{ position: 'absolute', top: 50, right: 0, background: S, border: `1px solid ${B}`, borderRadius: 16, width: 320, boxShadow: '0 8px 40px rgba(0,0,0,0.12)', zIndex: 200 }} onClick={e => e.stopPropagation()}>
               <div style={{ background: `linear-gradient(135deg,${G},#0f4a2a)`, borderRadius: '16px 16px 0 0', padding: '1.25rem', color: S, display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{ width: 48, height: 48, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
-                <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>{studentData.name}</div><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{studentData.email}</div></div>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: G }}>{student.photo}</div>
+                <div><div style={{ fontWeight: 700, fontSize: '1rem' }}>{student.name}</div><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{student.email}</div></div>
               </div>
               <div style={{ padding: '1rem 1.25rem' }}>
-                {[['Roll No.', studentData.roll], ['DOB', studentData.dob], ['Gender', studentData.gender], ['Phone', studentData.phone], ['Hostel', studentData.hostel], ['Department', studentData.dept], ['Batch', studentData.batch], ['CGPA', studentData.cgpa]].map(([k, v]) => (
+                {[['Roll No.', student.roll], ['DOB', student.dob], ['Gender', student.gender], ['Phone', student.phone], ['Hostel', student.hostel], ['Department', student.dept], ['Batch', student.batch], ['CGPA', student.cgpa]].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: `1px solid ${BG}`, fontSize: '0.82rem' }}>
                     <span style={{ color: T3 }}>{k}</span><span style={{ fontWeight: 600 }}>{v || '—'}</span>
                   </div>
@@ -1216,8 +695,8 @@ export default function StudentDashboard() {
             </button>
           ))}
           <div style={{ marginTop: 'auto', background: BG, borderRadius: 11, padding: '0.85rem', display: 'flex', gap: 9, alignItems: 'center' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{studentData.photo}</div>
-            <div><div style={{ fontSize: '0.78rem', fontWeight: 700 }}>{studentData.name.split(' ')[0]}</div><div style={{ fontSize: '0.68rem', color: T3 }}>{studentData.roll}</div></div>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: GL, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: G }}>{student.photo}</div>
+            <div><div style={{ fontSize: '0.78rem', fontWeight: 700 }}>{student.name.split(' ')[0]}</div><div style={{ fontSize: '0.68rem', color: T3 }}>{student.roll}</div></div>
           </div>
         </aside>
 
@@ -1227,7 +706,7 @@ export default function StudentDashboard() {
             <div style={{ marginBottom: '1.5rem' }}>
               <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.7rem', marginBottom: 3 }}>{TABS.find(t => t.id === tab)?.label}</div>
               <div style={{ fontSize: '0.8rem', color: T3 }}>
-                {tab === 'dashboard' && `Clearance ID: ${studentData.clearanceId} · ${clearedCount} of ${pipeline.length} cleared`}
+                {tab === 'dashboard' && `Clearance ID: ${student.clearanceId || 'N/A'} · ${clearedCount} of ${pipeline.length} cleared`}
                 {tab === 'heatmap' && 'Live view of department clearance status'}
                 {tab === 'certificates' && `${certs.filter(c => c.status === 'ready').length} ready · ${certs.filter(c => c.status === 'pending').length} pending`}
                 {tab === 'documents' && `${uploadedDocs.length} of ${docs.length} uploaded`}
@@ -1251,34 +730,15 @@ export default function StudentDashboard() {
               {uploadTarget ? `Uploading: ${docs.find(d => d.id === uploadTarget)?.name}` : 'Choose document type'}
               {uploadTarget && <span style={{ display: 'block', fontSize: '0.72rem', color: AM, marginTop: 4 }}>→ Sent to <strong>{docs.find(d => d.id === uploadTarget)?.targetDept}</strong> department</span>}
             </div>
-            {!uploadTarget && (
-              <select style={{ ...input, marginBottom: '1rem' }} onChange={e => { const doc = docs.find(d => d.name === e.target.value); if (doc) setUploadTarget(doc.id) }}>
-                <option value="">Select document...</option>
-                {docs.filter(d => !d.size).map(d => <option key={d.id} value={d.name}>{d.name} → {d.targetDept}</option>)}
-              </select>
-            )}
+            {!uploadTarget && (<select style={{ ...input, marginBottom: '1rem' }} onChange={e => { const doc = docs.find(d => d.name === e.target.value); if (doc) setUploadTarget(doc.id) }}><option value="">Select document...</option>{docs.filter(d => !d.size).map(d => <option key={d.id} value={d.name}>{d.name} → {d.targetDept}</option>)}</select>)}
             <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{ display: 'none' }} onChange={handleFileSelect} />
             <div style={{ border: `2px dashed ${selectedFile ? GM : B2}`, borderRadius: 12, padding: selectedFile ? '1.25rem' : '2rem', textAlign: 'center', background: selectedFile ? GX : BG, cursor: 'pointer', marginBottom: '1.25rem' }} onClick={() => fileInputRef.current?.click()}>
-              {selectedFile ? (
-                <>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: G, marginBottom: 4 }}>{selectedFile.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: T3 }}>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div>
-                  <div style={{ fontSize: '0.72rem', color: AM, marginTop: 6 }} onClick={e => { e.stopPropagation(); setSelectedFile(null) }}>✕ Remove</div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: T2, marginBottom: 4 }}>Click to choose file</div>
-                  <div style={{ fontSize: '0.78rem', color: T3 }}>PDF, JPG, PNG, DOC · max 5MB</div>
-                </>
-              )}
+              {selectedFile ? (<><div style={{ fontSize: 28, marginBottom: 8 }}>✅</div><div style={{ fontSize: '0.9rem', fontWeight: 700, color: G, marginBottom: 4 }}>{selectedFile.name}</div><div style={{ fontSize: '0.75rem', color: T3 }}>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div><div style={{ fontSize: '0.72rem', color: AM, marginTop: 6 }} onClick={e => { e.stopPropagation(); setSelectedFile(null) }}>✕ Remove</div></>)
+                : (<><div style={{ fontSize: 28, marginBottom: 8 }}>📎</div><div style={{ fontSize: '0.9rem', fontWeight: 600, color: T2, marginBottom: 4 }}>Click to choose file</div><div style={{ fontSize: '0.78rem', color: T3 }}>PDF, JPG, PNG, DOC · max 5MB</div></>)}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => { setUploadModal(false); setSelectedFile(null) }}>Cancel</button>
-              <button style={{ ...btn(G, S), flex: 1, opacity: uploading ? 0.6 : 1 }} onClick={confirmUpload} disabled={uploading}>
-                {uploading ? '⏳ Uploading...' : 'Upload'}
-              </button>
+              <button style={{ ...btn(G, S), flex: 1, opacity: uploading ? 0.6 : 1 }} onClick={confirmUpload} disabled={uploading}>{uploading ? '⏳ Uploading...' : 'Upload'}</button>
             </div>
           </div>
         </div>
@@ -1288,48 +748,14 @@ export default function StudentDashboard() {
       {payModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => payStep !== 'processing' && setPayModal(null)}>
           <div style={{ background: S, borderRadius: 18, padding: '2rem', width: 420 }} onClick={e => e.stopPropagation()}>
-            {payStep === 'form' && (
-              <>
-                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.4rem', marginBottom: '0.4rem' }}>Pay Due</div>
-                <div style={{ fontSize: '0.85rem', color: T3, marginBottom: '1.5rem' }}>{payModal.item} — <strong style={{ color: R }}>₹{payModal.amount}</strong></div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button>
-                  <button style={{ ...btn(G, S), flex: 1 }} onClick={processPayment}>Pay with Razorpay</button>
-                </div>
-              </>
-            )}
-            {payStep === 'processing' && (
-              <div style={{ textAlign: 'center', padding: '2.5rem' }}>
-                <div style={{ fontSize: 40, marginBottom: '1rem' }}>⏳</div>
-                <div style={{ fontWeight: 700 }}>Processing payment...</div>
-                <div style={{ fontSize: '0.83rem', color: T3, marginTop: 6 }}>Please do not close this window.</div>
-              </div>
-            )}
-            {payStep === 'success' && (
-              <div style={{ textAlign: 'center', padding: '1.5rem' }}>
-                <div style={{ fontSize: 48, marginBottom: '1rem' }}>✅</div>
-                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.5rem', marginBottom: '0.5rem' }}>Payment Successful!</div>
-                <div style={{ fontSize: '0.85rem', color: T3, marginBottom: '1.5rem' }}>₹{payModal.amount} paid. AI receipt ready.</div>
-                <div style={{ background: GX, borderRadius: 12, padding: '1rem', marginBottom: '1.25rem', textAlign: 'left', fontSize: '0.83rem' }}>
-                  {[['Receipt ID', `RCP-${Date.now().toString().slice(-6)}`], ['Amount', `₹${payModal.amount}`], ['Status', 'Paid ✓']].map(([k, v]) => (
-                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: `1px solid ${B}` }}>
-                      <span style={{ color: T3 }}>{k}</span><span style={{ fontWeight: 700, color: k === 'Status' ? G : T }}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button style={{ ...btn(GX, G), flex: 1, border: `1px solid ${B2}` }} onClick={() => generateAIReceipt(payModal, studentData, lastPaymentId)}>
-                    ↓ Download AI Receipt
-                  </button>
-                  <button style={{ ...btn(G, S), flex: 1 }} onClick={() => { setPayModal(null); showToast('Receipt saved!') }}>Done</button>
-                </div>
-              </div>
-            )}
+            {payStep === 'form' && (<><div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.4rem', marginBottom: '0.4rem' }}>Pay Due</div><div style={{ fontSize: '0.85rem', color: T3, marginBottom: '1.5rem' }}>{payModal.item} — <strong style={{ color: R }}>₹{payModal.amount}</strong></div><div style={{ display: 'flex', gap: 10 }}><button style={{ ...btn(BG, T2), flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button><button style={{ ...btn(G, S), flex: 1 }} onClick={processPayment}>Pay with Razorpay</button></div></>)}
+            {payStep === 'processing' && (<div style={{ textAlign: 'center', padding: '2.5rem' }}><div style={{ fontSize: 40, marginBottom: '1rem' }}>⏳</div><div style={{ fontWeight: 700 }}>Processing payment...</div></div>)}
+            {payStep === 'success' && (<div style={{ textAlign: 'center', padding: '1.5rem' }}><div style={{ fontSize: 48, marginBottom: '1rem' }}>✅</div><div style={{ fontFamily: "'DM Serif Display',serif", fontSize: '1.5rem', marginBottom: '0.5rem' }}>Payment Successful!</div><div style={{ fontSize: '0.85rem', color: T3, marginBottom: '1.5rem' }}>₹{payModal.amount} paid. Receipt ready.</div><div style={{ display: 'flex', gap: 10 }}><button style={{ ...btn(GX, G), flex: 1, border: `1px solid ${B2}` }} onClick={() => generateAIReceipt(payModal, student, lastPaymentId)}>↓ Download Receipt</button><button style={{ ...btn(G, S), flex: 1 }} onClick={() => { setPayModal(null); showToast('Receipt saved!') }}>Done</button></div></div>)}
           </div>
         </div>
       )}
 
-      {/* DOCUMENT PREVIEW MODAL */}
+      {/* PREVIEW MODAL */}
       {previewDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setPreviewDoc(null)}>
           <div style={{ background: S, borderRadius: 18, padding: '1.5rem', maxWidth: 600, width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -1337,18 +763,9 @@ export default function StudentDashboard() {
               <div style={{ fontWeight: 700, fontSize: '1rem' }}>{previewDoc.name}</div>
               <button style={btnSm} onClick={() => setPreviewDoc(null)}>✕ Close</button>
             </div>
-            {previewDoc.preview && previewDoc.preview.startsWith('data:image') ? (
-              <img src={previewDoc.preview} alt={previewDoc.name} style={{ width: '100%', borderRadius: 10, objectFit: 'contain' }} />
-            ) : previewDoc.preview && previewDoc.preview.startsWith('data:application/pdf') ? (
-              <iframe src={previewDoc.preview} style={{ width: '100%', height: 400, border: 'none', borderRadius: 10 }} title={previewDoc.name} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '3rem', color: T3 }}>
-                <div style={{ fontSize: 48 }}>📄</div>
-                <div style={{ marginTop: '1rem', fontWeight: 600 }}>{previewDoc.file}</div>
-                <div style={{ fontSize: '0.8rem', marginTop: 6 }}>Preview not available for this file type.</div>
-              </div>
-            )}
-            {previewDoc.size && <div style={{ fontSize: '0.72rem', color: T3, marginTop: '0.75rem', textAlign: 'center' }}>{previewDoc.size} · Uploaded {previewDoc.date}</div>}
+            {previewDoc.preview?.startsWith('data:image') ? <img src={previewDoc.preview} alt={previewDoc.name} style={{ width: '100%', borderRadius: 10, objectFit: 'contain' }} />
+              : previewDoc.preview?.startsWith('data:application/pdf') ? <iframe src={previewDoc.preview} style={{ width: '100%', height: 400, border: 'none', borderRadius: 10 }} title={previewDoc.name} />
+                : <div style={{ textAlign: 'center', padding: '3rem', color: T3 }}><div style={{ fontSize: 48 }}>📄</div><div style={{ marginTop: '1rem', fontWeight: 600 }}>{previewDoc.file}</div></div>}
           </div>
         </div>
       )}

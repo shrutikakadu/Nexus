@@ -2,20 +2,11 @@ import { useState, useEffect } from 'react'
 import AdminSidebar from '../../components/AdminSidebar'
 import StatsCard from '../../components/StatsCard'
 import ClearanceTable from '../../components/ClearanceTable'
-import ClearanceHeatmap from '../../components/ClearanceHeatmap'
-import NotificationPanel from '../../components/NotificationPanel'
 import DocumentViewer from '../../components/DocumentViewer'
 import RejectModal from '../../components/RejectModal'
 import { getSubmissionsForAdmin, adminApprove, adminReject, onStoreUpdate } from '../../utils/clearanceStore'
 import { fetchRegisteredStudents, updateClearanceAPI } from '../../utils/adminApi'
 import '../../styles/admin.css'
-
-const STUDENTS = [
-    { id: 's1', initials: 'TP', avatarClass: 'green-bg', name: 'Tanaya Patel', roll: '2021CS001', labManual: 'Submitted', equipment: 'Returned', statusColor: 'amber', statusLabel: 'Pending', heatmap: { Library: 'approved', Lab: 'pending', Accounts: 'approved', Hostel: 'approved', HOD: 'pending', Principal: 'locked' } },
-    { id: 's2', initials: 'HS', avatarClass: 'blue-bg', name: 'Hritani Sharma', roll: '2021CS042', labManual: 'Not Submitted', equipment: 'Pending', statusColor: 'red', statusLabel: 'Incomplete', heatmap: { Library: 'approved', Lab: 'pending', Accounts: 'pending', Hostel: 'approved', HOD: 'locked', Principal: 'locked' } },
-    { id: 's3', initials: 'RK', avatarClass: 'amber-bg', name: 'Rohit Kumar', roll: '2021CS017', labManual: 'Submitted', equipment: 'Pending', statusColor: 'amber', statusLabel: 'Pending', heatmap: { Library: 'approved', Lab: 'pending', Accounts: 'approved', Hostel: 'locked', HOD: 'locked', Principal: 'locked' } },
-    { id: 's4', initials: 'SK', avatarClass: 'purple-bg', name: 'Sahil Khan', roll: '2021CS066', labManual: 'Submitted', equipment: 'Returned', statusColor: 'amber', statusLabel: 'Pending', heatmap: { Library: 'approved', Lab: 'pending', Accounts: 'approved', Hostel: 'approved', HOD: 'locked', Principal: 'locked' } },
-]
 
 const COLUMNS = [
     { key: 'student', label: 'Student' },
@@ -28,20 +19,32 @@ export default function LabDashboard() {
     const [activeItem, setActiveItem] = useState('dashboard')
     const [approvedIds, setApprovedIds] = useState([])
     const [rejectedIds, setRejectedIds] = useState([])
-    const [selected, setSelected] = useState(STUDENTS[0])
+    const [selected, setSelected] = useState(null)
     const [toast, setToast] = useState({ msg: '', show: false })
-    const [pendingCount, setPendingCount] = useState(STUDENTS.length)
     const [storeSubmissions, setStoreSubmissions] = useState([])
     const [viewingDocs, setViewingDocs] = useState(null)
+<<<<<<< HEAD
     const [apiStudents, setApiStudents] = useState([])
     const [rejectTarget, setRejectTarget] = useState(null)
 
     useEffect(() => {
         fetchRegisteredStudents('Lab').then(s => { setApiStudents(s); setPendingCount(s.filter(x => x.status === 'pending').length + STUDENTS.length) })
     }, [])
+=======
+    const [flagModal, setFlagModal] = useState(null)
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     useEffect(() => {
-        function loadSubmissions() { setStoreSubmissions(getSubmissionsForAdmin('Lab')) }
+        function loadSubmissions() { 
+            const subs = getSubmissionsForAdmin('Lab')
+            setStoreSubmissions(subs)
+            if (!selected && subs.length > 0) setSelected({
+                id: `store_${subs[0].studentId}`, studentId: subs[0].studentId, initials: subs[0].initials, avatarClass: subs[0].avatarClass || 'blue-bg',
+                name: subs[0].studentName, roll: subs[0].studentId, labManual: 'Submitted', equipment: 'Returned',
+                status: subs[0].statusForRole, statusLabel: subs[0].statusForRole === 'approved' ? 'Cleared' : 'Pending',
+                documents: subs[0].documents, fromStore: true,
+            })
+        }
         loadSubmissions()
         return onStoreUpdate(loadSubmissions)
     }, [])
@@ -50,6 +53,7 @@ export default function LabDashboard() {
 
     function handleApprove(s) {
         if (approvedIds.includes(s.id)) return
+<<<<<<< HEAD
         if (s.labManual !== 'Submitted' || s.equipment !== 'Returned') { showToast(`⚠️ Cannot approve — ${s.name} has pending lab submissions`); return }
         if (s.fromStore && (!s.documents || s.documents.length === 0)) { showToast(`⚠️ Cannot approve — ${s.name} has not uploaded lab documents`); return }
         setApprovedIds(p => [...p, s.id]); setPendingCount(p => Math.max(0, p - 1))
@@ -68,17 +72,41 @@ export default function LabDashboard() {
         updateClearanceAPI(rejectTarget.studentId || rejectTarget.roll, 'Lab', 'rejected', reason)
         showToast(`✗ Lab clearance rejected for ${rejectTarget.name}`)
         setRejectTarget(null)
+=======
+        if (s.studentId) {
+            const res = adminApprove(s.studentId, 'Lab', 'Lab clearance approved. All equipment returned.')
+            if (res.success) {
+                setApprovedIds(p => [...p, s.id])
+                showToast(`✓ Lab clearance approved for ${s.name}`)
+            } else {
+                showToast(res.message)
+            }
+        }
+    }
+    function handleReject(s) {
+        setFlagModal({ student: s, reason: '' })
+    }
+    function confirmReject() {
+        if (!flagModal?.reason) { showToast('Please enter a reason'); return }
+        const s = flagModal.student
+        setRejectedIds(p => [...p, s.id])
+        if (s.studentId) adminReject(s.studentId, 'Lab', flagModal.reason)
+        showToast(`✗ Lab clearance rejected for ${s.name}`)
+        setFlagModal(null)
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
     }
 
-    const storeStudents = storeSubmissions
-        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending')
+    const tableData = storeSubmissions
+        .filter(s => s.relevantDocs.length > 0 || s.statusForRole === 'pending' || s.statusForRole === 'approved' || s.statusForRole === 'rejected')
         .map(s => ({
             id: `store_${s.studentId}`, studentId: s.studentId, initials: s.initials, avatarClass: s.avatarClass || 'blue-bg',
             name: s.studentName, roll: s.studentId, labManual: 'Submitted', equipment: 'Returned',
-            statusColor: s.statusForRole === 'approved' ? 'green' : 'amber',
-            statusLabel: s.statusForRole === 'approved' ? 'Cleared' : 'Pending',
-            heatmap: s.clearanceStatus, documents: s.relevantDocs, fromStore: true,
+            status: approvedIds.includes(`store_${s.studentId}`) ? 'approved' : rejectedIds.includes(`store_${s.studentId}`) ? 'rejected' : s.statusForRole,
+            statusColor: approvedIds.includes(`store_${s.studentId}`) ? 'green' : rejectedIds.includes(`store_${s.studentId}`) ? 'red' : (s.statusForRole === 'approved' ? 'green' : 'amber'),
+            statusLabel: approvedIds.includes(`store_${s.studentId}`) ? 'Cleared' : rejectedIds.includes(`store_${s.studentId}`) ? 'Rejected' : (s.statusForRole === 'approved' ? 'Cleared' : 'Pending'),
+            documents: s.relevantDocs, fromStore: true,
         }))
+<<<<<<< HEAD
     const mergedApi = apiStudents.filter(a => !storeStudents.some(s => s.roll === a.roll))
     const allStudents = [...STUDENTS, ...storeStudents.filter(ss => !STUDENTS.some(s => s.roll === ss.roll)), ...mergedApi.filter(a => !STUDENTS.some(s => s.roll === a.roll))]
 
@@ -88,15 +116,18 @@ export default function LabDashboard() {
         statusColor: approvedIds.includes(s.id) ? 'green' : rejectedIds.includes(s.id) ? 'red' : s.statusColor,
         statusLabel: approvedIds.includes(s.id) ? 'Cleared' : rejectedIds.includes(s.id) ? 'Rejected' : s.statusLabel,
     }))
+=======
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
     return (
         <div className="admin-layout">
-            <AdminSidebar role="lab" activeItem={activeItem} onNavigate={setActiveItem} badges={{ pending: pendingCount, notifs: 1 }} />
+            <AdminSidebar role="lab" activeItem={activeItem} onNavigate={setActiveItem} badges={{ pending: tableData.filter(x=>x.status==='pending').length, notifs: 1 }} />
             <main className="admin-content">
                 <div className="admin-header">
-                    <div className="admin-header-left"><h1>Lab In-Charge Dashboard</h1><p>Verify lab manual submissions and equipment returns</p></div>
+                    <div className="admin-header-left"><h1>Lab Dashboard</h1><p>Verify lab manual submissions and equipment returns</p></div>
                     <div className="admin-header-actions"><button className="btn btn-outline" onClick={() => showToast('Report exported')}>↓ Export</button></div>
                 </div>
+<<<<<<< HEAD
                 {activeItem === 'students' && (
                     <div className="card"><div className="card-label">Student Records</div><p style={{color: 'var(--text3)'}}>Student directory module coming soon.</p></div>
                 )}
@@ -106,13 +137,14 @@ export default function LabDashboard() {
                 {activeItem === 'reports' && (
                     <div className="card"><div className="card-label">Reports & Analytics</div><p style={{color: 'var(--text3)'}}>Export options and analytics module coming soon.</p></div>
                 )}
+=======
+>>>>>>> 4d86a8e (Restore lost source code and features from detached HEAD)
 
                 {(activeItem === 'dashboard' || activeItem === 'clearances') && (
                     <>
                         {activeItem === 'dashboard' && (
                             <div className="stats-grid">
-                                <StatsCard label="Clearances Pending" value={pendingCount} subtitle="Awaiting your action" color="amber" />
-                                <StatsCard label="Equipment Pending" value="3" subtitle="Not yet returned" color="red" />
+                                <StatsCard label="Clearances Pending" value={tableData.filter(x=>x.status==='pending').length} subtitle="Awaiting action" color="amber" />
                                 <StatsCard label="Manuals Submitted" value="108/124" subtitle="This batch" color="blue" />
                                 <StatsCard label="Cleared This Week" value="21" subtitle="All requirements met" color="green" />
                             </div>
@@ -121,39 +153,45 @@ export default function LabDashboard() {
                                 <ClearanceTable columns={COLUMNS} data={tableData} approvedIds={approvedIds} onApprove={handleApprove} onReject={handleReject} onRowClick={setSelected}
                                     renderActions={(row) => (
                                         <div className="action-group">
-                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); row.studentId ? setViewingDocs({ studentId: row.studentId, studentName: row.name }) : showToast(`Viewing submission for ${row.name}`) }}>
-                                                {row.fromStore ? '📄 View Docs' : 'View'}
-                                            </button>
+                                            <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); setViewingDocs({ studentId: row.studentId, studentName: row.name }) }}>📄 Docs</button>
                                             <button className="btn btn-sm btn-approve" onClick={e => { e.stopPropagation(); handleApprove(row) }}>✓ Approve</button>
                                             <button className="btn btn-sm btn-reject" onClick={e => { e.stopPropagation(); handleReject(row) }}>✗ Reject</button>
                                         </div>
                                     )}
                                 />
-                                <div className="detail-card">
-                                    <div className="detail-header">
-                                        <div className={`student-avatar ${selected.avatarClass}`} style={{ width: 44, height: 44 }}>{selected.initials}</div>
-                                        <div><div className="detail-name">{selected.name}</div><div className="detail-sub">{selected.roll} — B.Tech CS — Batch 2025</div></div>
-                                        <div className={`detail-status ${selected.labManual === 'Submitted' && selected.equipment === 'Returned' ? 'approved' : 'pending'}`}>
-                                            {selected.labManual === 'Submitted' && selected.equipment === 'Returned' ? 'Ready to Clear' : 'Incomplete'}
+                                {selected && (
+                                    <div className="detail-card">
+                                        <div className="detail-header">
+                                            <div className={`student-avatar ${selected.avatarClass}`} style={{ width: 44, height: 44 }}>{selected.initials}</div>
+                                            <div><div className="detail-name">{selected.name}</div><div className="detail-sub">{selected.roll} — B.Tech CS — Batch 2025</div></div>
+                                            <div className={`detail-status ${selected.status === 'approved' ? 'approved' : 'pending'}`}>{selected.statusLabel}</div>
+                                        </div>
+                                        <div className="detail-section-label">Lab Details</div>
+                                        <div className="detail-info-grid">
+                                            <div className="detail-info-item"><div className="detail-info-label">Lab Manual</div><div className="detail-info-value" style={{ color: selected.labManual === 'Submitted' ? 'var(--green)' : 'var(--red)' }}>{selected.labManual}</div></div>
+                                            <div className="detail-info-item"><div className="detail-info-label">Equipment</div><div className="detail-info-value" style={{ color: selected.equipment === 'Returned' ? 'var(--green)' : 'var(--amber)' }}>{selected.equipment}</div></div>
+                                        </div>
+                                        <div className="detail-actions">
+                                            <button className="btn btn-solid" onClick={() => handleApprove(selected)}>✓ Approve Lab Clearance →</button>
+                                            <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
                                         </div>
                                     </div>
-                                    <div className="detail-section-label">Lab Submission Details</div>
-                                    <div className="detail-info-grid">
-                                        <div className="detail-info-item"><div className="detail-info-label">Lab Manual</div><div className="detail-info-value" style={{ color: selected.labManual === 'Submitted' ? 'var(--green)' : 'var(--red)' }}>{selected.labManual}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Equipment</div><div className="detail-info-value" style={{ color: selected.equipment === 'Returned' ? 'var(--green)' : 'var(--amber)' }}>{selected.equipment}</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Lab Assigned</div><div className="detail-info-value">Lab B — Network Lab</div></div>
-                                        <div className="detail-info-item"><div className="detail-info-label">Submission Date</div><div className="detail-info-value">Apr 14, 2025</div></div>
-                                    </div>
-                                    <div className="detail-actions">
-                                        <button className="btn btn-solid" onClick={() => handleApprove(selected)}>✓ Approve Lab Clearance →</button>
-                                        <button className="btn btn-reject" onClick={() => handleReject(selected)}>✗ Reject</button>
-                                    </div>
-                                </div>
+                                )}
                         </div>
                     </>
                 )}
             </main>
             <div className={`admin-toast ${toast.show ? 'visible' : 'hidden'}`}>{toast.msg}</div>
+            {flagModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#fff', padding: '2rem', borderRadius: '18px', width: '400px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+                        <h3 style={{ margin: '0 0 1rem' }}>Flag Application</h3>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginBottom: '1rem' }}>Explain why you are flagging <strong>{flagModal.student.name}</strong>:</p>
+                        <textarea style={{ width: '100%', height: '100px', borderRadius: '10px', border: '1px solid var(--border)', padding: '0.75rem', fontFamily: 'inherit', fontSize: '0.9rem', outline: 'none', marginBottom: '1.25rem' }} placeholder="Reason..." value={flagModal.reason} onChange={e => setFlagModal({...flagModal, reason: e.target.value})} />
+                        <div style={{ display: 'flex', gap: '0.75rem' }}><button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setFlagModal(null)}>Cancel</button><button className="btn btn-solid" style={{ flex: 1, background: 'var(--red)', border: 'none' }} onClick={confirmReject}>Submit Flag</button></div>
+                    </div>
+                </div>
+            )}
             {viewingDocs && <DocumentViewer role="Lab" studentId={viewingDocs.studentId} studentName={viewingDocs.studentName} onClose={() => setViewingDocs(null)} />}
             <RejectModal isOpen={!!rejectTarget} onClose={() => setRejectTarget(null)} onConfirm={confirmReject} title="Reject Lab Clearance" />
         </div>
